@@ -1,0 +1,14 @@
+version: "2"
+services:
+  backend-amreta-net:
+    container_name: backend-amreta-net
+    image: backend-amreta-net
+    network_mode: "host"
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/home/sandi29/amreta-net/backend-amreta-net
+    env_file:
+      - /home/sandi29/amreta-net/backend-amreta-net/.env

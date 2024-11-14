@@ -1,0 +1,13 @@
+FROM python:3.9 AS builder
+
+WORKDIR /home/sandi29/amreta-net/backend-amreta-net
+COPY . /home/sandi29/amreta-net/backend-amreta-net
+
+# Create the virtual environment
+RUN rm -rf venv
+RUN python3 -m venv venv
+RUN /bin/bash -c "source venv/bin/activate"
+RUN /bin/bash -c "pip install -r requirements.txt"
+
+EXPOSE 5000
+CMD uvicorn app.main:app --host 0.0.0.0 --reload --port 5000
