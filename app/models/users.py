@@ -8,7 +8,9 @@ UserProjections = {
     "name": 1,
     "username": 1,
     "email": 1,
+    "phone_number": 1,
     "role": 1,
+    "status": 1,
 }
 
 
@@ -23,8 +25,9 @@ class UserData(BaseModel):
     name: str
     username: str
     email: Optional[str] = None
-    id_project: Optional[int] = None
+    phone_number: Optional[str] = None
     role: Optional[int] = None
+    status: Optional[int] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -35,7 +38,9 @@ class UserInsertData(BaseModel):
     username: str
     password: str
     email: Optional[str] = None
+    phone_number: Optional[str] = None
     role: UserRole
+    status: int = 1
 
 
 class UserUpdateData(BaseModel):

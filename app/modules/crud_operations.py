@@ -28,8 +28,8 @@ async def GetManyData(
     query = []
     query_facet = v_query.copy()
     if v_pagination:
-        query.append({"$skip": (v_pagination["page"] - 1) * v_pagination["item"]})
-        query.append({"$limit": v_pagination["item"]})
+        query.append({"$skip": (v_pagination["page"] - 1) * v_pagination["items"]})
+        query.append({"$limit": v_pagination["items"]})
 
     if v_projection:
         query.append({"$project": v_projection})

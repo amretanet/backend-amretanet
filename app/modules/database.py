@@ -1,4 +1,5 @@
 import os
+import motor.motor_asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
@@ -13,8 +14,8 @@ db = DataBase()
 
 
 async def ConnectToMongoDB():
-    db.client = AsyncIOMotorClient(
-        os.environ["AMRETA_DB_URI"], tls=True, tlsAllowInvalidCertificates=True
+     db.client = motor.motor_asyncio.AsyncIOMotorClient(
+        os.environ["AMRETA_DB_URI"]
     )
 
 
@@ -22,5 +23,5 @@ async def DisconnectMongoDB():
     db.client.close()
 
 
-async def GetBMDatabase() -> AsyncIOMotorClient:
+async def GetAmretaDatabase() -> AsyncIOMotorClient:
     return db.client[os.environ["AMRETA_DB_NAME"]]

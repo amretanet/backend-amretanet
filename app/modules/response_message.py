@@ -1,4 +1,4 @@
-DEFAULT_MESSAGE = "Terjadi Kesalahan Pada Sistem!"
+SYSTEM_ERROR_MESSAGE = "Terjadi Kesalahan Pada Sistem!"
 
 NOT_FOUND_MESSAGE = "Data Tidak Ditemukan!"
 

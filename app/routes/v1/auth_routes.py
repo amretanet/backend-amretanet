@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from app.modules.crud_operations import CreateOneData, GetOneData, UpdateOneData
 from app.models.auth import RefreshTokenPayload, Token
 from app.models.users import UserData
-from app.modules.database import AsyncIOMotorClient, GetBMDatabase
+from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from fastapi import Depends, HTTPException, status, APIRouter, Request, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt, ExpiredSignatureError
@@ -13,7 +13,6 @@ from passlib.context import CryptContext
 from bson import ObjectId
 import os
 from dotenv import load_dotenv
-from app.modules.cryptography import RSADecryption
 
 load_dotenv()
 
@@ -28,8 +27,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 async def VerifyPassword(plain_password, hashed_password):
     try:
-        password = await RSADecryption(plain_password)
-        return pwd_context.verify(password, hashed_password)
+        # password = await RSADecryption(plain_password)
+        return pwd_context.verify(plain_password, hashed_password)
     except Exception as e:
         print(e)
         return False
@@ -60,7 +59,7 @@ def CreateAccessToken(data: dict, expires_delta: Optional[timedelta] = None):
 
 async def GetCurrentUser(
     token: str = Depends(oauth2_scheme),
-    db: AsyncIOMotorClient = Depends(GetBMDatabase),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -96,7 +95,7 @@ router = APIRouter(
 async def login_for_access_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncIOMotorClient = Depends(GetBMDatabase),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     user = await AuthenticateUser(form_data.username, form_data.password, db)
 
@@ -156,7 +155,7 @@ async def verify_token(current_user: UserData = Depends(GetCurrentUser)):
 async def refresh_token(
     request: Request,
     data: RefreshTokenPayload = Body(..., embed=True),
-    db: AsyncIOMotorClient = Depends(GetBMDatabase),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     try:
         payload = jwt.decode(data.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
