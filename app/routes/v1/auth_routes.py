@@ -3,16 +3,17 @@ from dateutil import tz
 from typing import Optional
 from fastapi.responses import JSONResponse
 from app.modules.crud_operations import CreateOneData, GetOneData, UpdateOneData
-from app.models.auth import RefreshTokenPayload, Token
+from app.models.auth import LoginData, RefreshTokenPayload, Token
 from app.models.users import UserData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from fastapi import Depends, HTTPException, status, APIRouter, Request, Body
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt, ExpiredSignatureError
 from passlib.context import CryptContext
 from bson import ObjectId
 import os
 from dotenv import load_dotenv
+from app.modules.generals import GetCurrentDateTime
 
 load_dotenv()
 
@@ -22,7 +23,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"])
 REFRESH_TOKEN_EXPIRE_MINUTES = int(os.environ["REFRESH_TOKEN_EXPIRE_MINUTES"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 async def VerifyPassword(plain_password, hashed_password):
@@ -34,8 +35,8 @@ async def VerifyPassword(plain_password, hashed_password):
         return False
 
 
-async def AuthenticateUser(username: str, password: str, db: AsyncIOMotorClient):
-    user_data = await GetOneData(db.users, {"username": username})
+async def AuthenticateUser(email: str, password: str, db: AsyncIOMotorClient):
+    user_data = await GetOneData(db.users, {"email": email})
     if not user_data:
         return False
 
@@ -49,9 +50,9 @@ async def AuthenticateUser(username: str, password: str, db: AsyncIOMotorClient)
 def CreateAccessToken(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = GetCurrentDateTime() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = GetCurrentDateTime() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -69,7 +70,7 @@ async def GetCurrentUser(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         id: str = payload.get("sub")
-        username: int = payload.get("username")
+        email: int = payload.get("email")
         if id is None:
             raise credentials_exception
     except ExpiredSignatureError:
@@ -79,37 +80,36 @@ async def GetCurrentUser(
         credentials_exception.detail = "Token is invalid"
         raise credentials_exception
 
-    user = await GetOneData(db.users, {"username": username})
+    user = await GetOneData(db.users, {"email": email})
 
     if user is None:
         raise credentials_exception
     return UserData(**user)
 
 
-router = APIRouter(
-    tags=["Authentication"],
-)
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=Token, response_model_by_alias=False)
 async def login_for_access_token(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    data: LoginData,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    user = await AuthenticateUser(form_data.username, form_data.password, db)
+    payload = data.dict(exclude_unset=True)
+    user = await AuthenticateUser(payload["email"], payload["password"], db)
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Username atau Password Salah!",
+            detail="Email atau Password Salah!",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     payload = {
         "sub": user["_id"],
         "role": user["role"],
-        "username": user["username"],
+        "email": user["email"],
     }
 
     refresh_token_payload = {"sub": user["_id"]}
@@ -124,24 +124,24 @@ async def login_for_access_token(
     today = datetime.now()
     access_log_payload = {
         "user_id": user["_id"],
-        "username": user["username"],
+        "email": user["email"],
         "ip": request.client.host,
         "user_agent": request.headers.get("User-Agent"),
         "refresh_token": refresh_token,
         "date": today.astimezone(to_zone),
         "valid": True,
     }
-    await db.access_logs.insert_one(access_log_payload)
+    await CreateOneData(db.access_logs, access_log_payload)
     del user["password"]
 
-    response: Token = {
+    auth_data: Token = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "Bearer",
         "user_data": user,
     }
 
-    return response
+    return JSONResponse(content={"auth_data": auth_data})
 
 
 @router.get("/verify")
@@ -176,7 +176,7 @@ async def refresh_token(
             payload = {
                 "sub": user["_id"],
                 "role": user["role"],
-                "username": user["username"],
+                "email": user["email"],
             }
             access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
             access_token = CreateAccessToken(
@@ -196,7 +196,7 @@ async def refresh_token(
                 today = datetime.now()
                 access_log_payload = {
                     "user_id": user.id,
-                    "username": user.username,
+                    "email": user.email,
                     "ip": request.client.host,
                     "user_agent": request.headers.get("User-Agent"),
                     "refresh_token": refresh_token,

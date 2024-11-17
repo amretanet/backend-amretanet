@@ -14,4 +14,8 @@ class Source(int, Enum):
     twitter = 2
     youtube = 3
     tiktok = 4
-    
+
+
+class Gender(str, Enum):
+    male = "L"
+    female = "P"

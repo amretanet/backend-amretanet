@@ -1,16 +1,19 @@
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.models.generals import Gender
 
 # responses
 UserProjections = {
     "_id": 1,
     "name": 1,
-    "username": 1,
     "email": 1,
     "phone_number": 1,
-    "role": 1,
     "status": 1,
+    "gender": 1,
+    "saldo": 1,
+    "role": 1,
+    "address": 1,
 }
 
 
@@ -23,11 +26,13 @@ class UserRole(int, Enum):
 class UserData(BaseModel):
     id: str = Field(..., alias="_id")
     name: str
-    username: str
-    email: Optional[str] = None
+    email: str
     phone_number: Optional[str] = None
-    role: Optional[int] = None
     status: Optional[int] = None
+    gender: Optional[str] = None
+    saldo: Optional[int] = 0
+    role: Optional[int] = None
+    address: Optional[str] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -35,19 +40,25 @@ class UserData(BaseModel):
 
 class UserInsertData(BaseModel):
     name: str
-    username: str
+    email: str
     password: str
-    email: Optional[str] = None
     phone_number: Optional[str] = None
-    role: UserRole
     status: int = 1
+    gender: Gender
+    saldo: int = 0
+    role: UserRole
+    address: str
 
 
 class UserUpdateData(BaseModel):
     name: str
-    username: str
-    email: Optional[str] = None
+    email: str
+    phone_number: Optional[str] = None
+    status: int = 1
+    gender: Gender
+    saldo: int = 0
     role: UserRole
+    address: str
 
 
 class UserChangePasswordData(BaseModel):

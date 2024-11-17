@@ -53,7 +53,7 @@ async def get_users(
         query = {
             "$or": [
                 {"name": {"$regex": key, "$options": "i"}},
-                {"username": {"$regex": key, "$options": "i"}},
+                {"email": {"$regex": key, "$options": "i"}},
             ]
         }
     pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
@@ -96,10 +96,10 @@ async def create_user(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
-    exist_user_data = await GetOneData(db.users, {"username": payload["username"]})
+    exist_user_data = await GetOneData(db.users, {"email": payload["email"]})
     if exist_user_data:
         raise HTTPException(
-            status_code=400, detail={"message": "Username Telah Tersedia!"}
+            status_code=400, detail={"message": "email Telah Tersedia!"}
         )
 
     payload["created_at"] = GetCurrentDateTime()
@@ -124,12 +124,12 @@ async def update_user(
         raise HTTPException(status_code=400, detail={"message": NOT_FOUND_MESSAGE})
 
     payload = data.dict(exclude_unset=True)
-    exist_username_data = await GetOneData(
-        db.users, {"username": payload["username"], "_id": {"$ne": ObjectId(id)}}
+    exist_email_data = await GetOneData(
+        db.users, {"email": payload["email"], "_id": {"$ne": ObjectId(id)}}
     )
-    if exist_username_data:
+    if exist_email_data:
         raise HTTPException(
-            status_code=400, detail={"message": "Username Telah Tersedia!"}
+            status_code=400, detail={"message": "Email Telah Tersedia!"}
         )
 
     payload["updated_at"] = GetCurrentDateTime()
