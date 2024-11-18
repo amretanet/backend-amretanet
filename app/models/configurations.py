@@ -1,15 +1,6 @@
-# responses
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel
-
-
-MapsApiProjections = {
-    "_id": 1,
-    "maps_api": 1,
-    "acs_api": 1,
-    "updated_at": 1,
-}
 
 
 # schemas

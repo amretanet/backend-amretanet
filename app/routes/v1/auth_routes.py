@@ -7,7 +7,7 @@ from app.models.auth import LoginData, RefreshTokenPayload, Token
 from app.models.users import UserData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from fastapi import Depends, HTTPException, status, APIRouter, Request, Body
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt, ExpiredSignatureError
 from passlib.context import CryptContext
 from bson import ObjectId
@@ -93,16 +93,15 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/login", response_model=Token, response_model_by_alias=False)
 async def login_for_access_token(
     request: Request,
-    data: LoginData,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    payload = data.dict(exclude_unset=True)
-    user = await AuthenticateUser(payload["email"], payload["password"], db)
+    user = await AuthenticateUser(form_data.username, form_data.password, db)
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email atau Password Salah!",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "Email atau Password Salah!"},
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -141,7 +140,7 @@ async def login_for_access_token(
         "user_data": user,
     }
 
-    return JSONResponse(content={"auth_data": auth_data})
+    return JSONResponse(content=auth_data)
 
 
 @router.get("/verify")

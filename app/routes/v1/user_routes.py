@@ -13,6 +13,7 @@ from app.models.users import (
     UserChangePasswordData,
     UserData,
     UserInsertData,
+    UserRole,
     UserUpdateData,
 )
 from app.models.users import UserProjections
@@ -25,6 +26,7 @@ from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
     OBJECT_ID_NOT_VALID_MESSAGE,
@@ -34,6 +36,12 @@ from app.routes.v1.auth_routes import (
     VerifyPassword,
 )
 from passlib.context import CryptContext
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -43,20 +51,25 @@ router = APIRouter(prefix="/user", tags=["Users"])
 @router.get("")
 async def get_users(
     key: str = None,
+    role: UserRole = None,
     page: int = 1,
     items: int = 10,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     query = {}
-    if key is not None:
+    if key:
         query = {
             "$or": [
                 {"name": {"$regex": key, "$options": "i"}},
                 {"email": {"$regex": key, "$options": "i"}},
+                {"phone_number": {"$regex": key, "$options": "i"}},
             ]
         }
-    pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
+    if role:
+        query["role"] = role
+
+    pipeline = [{"$match": query}, {"$sort": {"role": 1, "name": 1}}]
 
     user_data, count = await GetManyData(
         db.users, pipeline, UserProjections, {"page": page, "items": items}
@@ -99,7 +112,7 @@ async def create_user(
     exist_user_data = await GetOneData(db.users, {"email": payload["email"]})
     if exist_user_data:
         raise HTTPException(
-            status_code=400, detail={"message": "email Telah Tersedia!"}
+            status_code=400, detail={"message": "Email Telah Tersedia!"}
         )
 
     payload["created_at"] = GetCurrentDateTime()
@@ -155,6 +168,30 @@ async def delete_user(
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
+
+
+@router.put("/reset-password/{id}")
+async def reset_password(
+    id: str,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
+    exist_user = await GetOneData(db.users, {"_id": ObjectId(id)})
+    if not exist_user:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    password = pwd_context.hash(DEFAULT_PASSWORD)
+    result = await UpdateOneData(
+        db.users, {"_id": ObjectId(id)}, {"$set": {"password": password}}
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    return JSONResponse(content={"message": "Password Telah Direset!"})
 
 
 @router.put("/change-password/{id}")
