@@ -1,11 +1,17 @@
 from fastapi import APIRouter
 from app.routes.v1 import auth_routes
+from app.routes.v1 import customer_routes
 from app.routes.v1 import configuration_routes
+from app.routes.v1 import hardware_routes
+from app.routes.v1 import util_routes
 from app.routes.v1 import information_routes
 from app.routes.v1 import user_routes
 
 router = APIRouter()
 router.include_router(auth_routes.router)
+router.include_router(hardware_routes.router)
+router.include_router(customer_routes.router)
 router.include_router(configuration_routes.router)
+router.include_router(util_routes.router)
 router.include_router(information_routes.router)
 router.include_router(user_routes.router)

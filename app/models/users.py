@@ -20,15 +20,11 @@ UserProjections = {
 # schemas
 class UserRole(int, Enum):
     admin = 1
-    member_ppoe = 2
-    member_hotspot = 3
-    reseler_hotspot = 4
-    sales_ppoe = 5
+    member = 2
+    sales = 5
     network_operator = 6
     customer_service = 7
     employee = 8
-    member_premium = 9
-    bill_collector = 10
 
 
 class UserData(BaseModel):

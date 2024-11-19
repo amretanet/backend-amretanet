@@ -1,11 +1,16 @@
 import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .modules.database import ConnectToMongoDB, DisconnectMongoDB
 from app.routes import main
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 load_dotenv()
+
+ASSET_DIR = Path("assets/images")
+ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 app_version = os.environ["API_VERSION"]
 
@@ -26,6 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(main.router)
+app.mount("/assets/images", StaticFiles(directory=ASSET_DIR), name="static")
 
 
 @app.get("/")
