@@ -43,6 +43,4 @@ class WhatsappBotUpdateData(BaseModel):
     bot_number: str
     admin_number: str
     url_gateway: str
-    url_media: str
-    url_server: str
     api_key: str

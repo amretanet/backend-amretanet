@@ -118,6 +118,17 @@ async def create_user(
     payload["created_at"] = GetCurrentDateTime()
     # payload["password"] = await RSADecryption(payload["password"])
     payload["password"] = pwd_context.hash(payload["password"])
+    if payload["role"] != UserRole.customer:
+        payload["ref_code"] = 240801000000
+        latest_ref_code = await GetOneData(
+            db.users,
+            {"ref_code": {"$exists": True}},
+            sort_by="ref_code",
+            sort_direction=-1,
+        )
+        if latest_ref_code:
+            payload["ref_code"] = int(latest_ref_code["ref_code"]) + 1
+
     result = await CreateOneData(db.users, payload)
     if not result.inserted_id:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})

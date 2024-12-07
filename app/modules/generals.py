@@ -1,11 +1,29 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 import pytz
 from typing import Any
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def AddURLHTTPProtocol(url):
+    if not url.startswith(("http://", "https://")):
+        url = f"http://{url}"
+    return url
+
+
+def ReminderDateFormatter(due_date):
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+    try:
+        full_due_date = datetime(
+            year=current_year, month=current_month, day=int(due_date)
+        )
+        five_days_before = full_due_date - timedelta(days=5)
+        return five_days_before.strftime("%d")
+    except ValueError:
+        return None
 
 
 def JsonObjectFormatter(obj: Any):
@@ -61,6 +79,3 @@ def ResponseFormatter(data={}, message: str = "", success: bool = False):
         "success": success,
     }
     return response
-
-
-

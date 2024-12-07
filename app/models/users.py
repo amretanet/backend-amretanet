@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.models.generals import Gender
+from app.models.generals import GenderData
 
 # responses
 UserProjections = {
@@ -20,11 +20,11 @@ UserProjections = {
 # schemas
 class UserRole(int, Enum):
     admin = 1
-    member = 2
-    sales = 5
-    network_operator = 6
-    customer_service = 7
-    employee = 8
+    sales = 2
+    customer_service = 3
+    network_operator = 4
+    technician = 5
+    customer = 99
 
 
 class UserData(BaseModel):
@@ -48,7 +48,7 @@ class UserInsertData(BaseModel):
     password: str
     phone_number: Optional[str] = None
     status: int = 1
-    gender: Gender
+    gender: GenderData
     saldo: int = 0
     role: UserRole
     address: str
@@ -59,7 +59,7 @@ class UserUpdateData(BaseModel):
     email: str
     phone_number: Optional[str] = None
     status: int = 1
-    gender: Gender
+    gender: GenderData
     saldo: int = 0
     role: UserRole
     address: str

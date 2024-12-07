@@ -3,7 +3,7 @@ from dateutil import tz
 from typing import Optional
 from fastapi.responses import JSONResponse
 from app.modules.crud_operations import CreateOneData, GetOneData, UpdateOneData
-from app.models.auth import LoginData, RefreshTokenPayload, Token
+from app.models.auth import RefreshTokenPayload, Token
 from app.models.users import UserData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from fastapi import Depends, HTTPException, status, APIRouter, Request, Body
@@ -103,6 +103,14 @@ async def login_for_access_token(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"message": "Email atau Password Salah!"},
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user["status"] != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "message": "Akun Tidak Aktif! Silahkan Hubungi Administrator untuk Mengaktifkan Kembali Akun Anda"
+            },
         )
 
     payload = {

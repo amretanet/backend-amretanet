@@ -10,6 +10,8 @@ DATE_NOT_VALID_MESSAGE = "Format Tanggal Tidak Sesuai!"
 
 OBJECT_ID_NOT_VALID_MESSAGE = "Format ID Tidak Sesuai!"
 
+DATA_FORMAT_NOT_VALID_MESSAGE = "Format Data Tidak Sesuai!"
+
 DATA_HAS_INSERTED_MESSAGE = "Data Telah Ditambahkan!"
 
 DATA_HAS_UPDATED_MESSAGE = "Data Telah Diubah!"

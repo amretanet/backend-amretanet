@@ -1,45 +1,65 @@
 from typing import Optional
 from pydantic import BaseModel
+from app.models.generals import GenderData
+from enum import Enum
 
-from app.models.generals import Gender
+
+# schemas
+class CustomerStatusData(int, Enum):
+    nonactive = 0
+    active = 1
+    pending = 2
+    free = 3
+    isolir = 4
+    paid = 5
 
 
-class IDCard(BaseModel):
+class CustomerBillingTypeData(str, Enum):
+    PRABAYAR = "PRABAYAR"
+    PASCABAYAR = "PASCABAYAR"
+
+
+class CustomerIDCardData(BaseModel):
     type: str
     number: str
-    image_url: str
+    image_url: Optional[str]
 
 
-class Location(BaseModel):
-    status: str
+class CustomerLocationData(BaseModel):
+    house_status: str
+    house_owner: str
     address: str
-    longitude: float
     latitude: float
-    image_url: str
-
-
-class Package(BaseModel):
-    item: str
-    mode: str
-    router: str
+    longitude: float
 
 
 class CustomerInsertData(BaseModel):
     name: str
-    gender: Gender
-    service_number: int
-    id_card: IDCard
-    location: Location
+    id_card: CustomerIDCardData
+    gender: GenderData
     email: str
     phone_number: str
-    package: str
-    due_date: int
-    payment_type:str 
-    ppn: Optional[int] = 0
-    unique_code: Optional[str] = None
-    odp_code:str
-    odp_port:str
-    router:str
-    mode:str
-    server:str
-    
+    location: CustomerLocationData
+    description: str
+    billing_type: CustomerBillingTypeData
+    ppn: int
+    due_date: str
+    referral: Optional[int] = 0
+    id_router: str
+    id_package: str
+    id_add_on_package: Optional[list[str]] = []
+    id_coverage_area: str
+    id_odp: str
+    port_odp: int
+
+
+class CustomerRegisterData(BaseModel):
+    name: str
+    id_card: CustomerIDCardData
+    gender: GenderData
+    email: str
+    phone_number: str
+    location: CustomerLocationData
+    referral: Optional[int] = 0
+    id_package: str
+    instalation_date: Optional[str] = None

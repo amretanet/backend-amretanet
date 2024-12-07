@@ -9,3 +9,5 @@ passlib
 cryptography
 python-multipart
 bcrypt
+requests
+librouteros

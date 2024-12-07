@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ASSET_DIR = Path("assets/images")
+ASSET_DIR = Path("assets")
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 app_version = os.environ["API_VERSION"]
@@ -31,7 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(main.router)
-app.mount("/assets/images", StaticFiles(directory=ASSET_DIR), name="static")
+app.mount("/assets", StaticFiles(directory=ASSET_DIR), name="static")
 
 
 @app.get("/")
