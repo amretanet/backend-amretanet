@@ -52,6 +52,7 @@ async def UpdateMikrotikPPPSecret(
     try:
         exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
         if not exist_router:
+            print("gaada router")
             return False
 
         host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))

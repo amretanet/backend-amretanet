@@ -498,7 +498,8 @@ async def update_customer(
 
         # check exist id card number
         exist_phone_number = await GetOneData(
-            db.customers, {"phone_number": payload["phone_number"]}
+            db.customers,
+            {"phone_number": payload["phone_number"], "_id": {"$ne": ObjectId(id)}},
         )
         if exist_phone_number:
             raise HTTPException(
@@ -538,10 +539,14 @@ async def update_customer(
                 disabled=disabled,
             )
             if not is_secret_updated:
-                raise HTTPException(
-                    status_code=404,
-                    detail={"message": "Gagal Mengubah Secret Mikrotik!"},
+                id_secret = await CreateMikrotikPPPSecret(
+                    db,
+                    payload["id_router"],
+                    payload["name"],
+                    package_data.get("router_profile", "default"),
+                    exist_data.get("service_number"),
                 )
+                payload["id_secret"] = id_secret
         else:
             id_secret = await CreateMikrotikPPPSecret(
                 db,

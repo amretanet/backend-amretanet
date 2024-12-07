@@ -1,7 +1,8 @@
+from io import BytesIO
 from urllib.parse import urlencode, urljoin
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from app.models.generals import Pagination
 from app.models.router import RouterInsertData
 from app.models.users import UserData
@@ -13,6 +14,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.modules.pdf import CreateInvoicePDF
 from app.modules.moota import (
     CreateMootaMutation,
     GetMootaMutationTracking,
@@ -32,6 +34,8 @@ import os
 from dotenv import load_dotenv
 import requests
 from urllib.request import Request, urlopen
+from fpdf import FPDF
+from PIL import Image
 
 load_dotenv()
 
@@ -46,7 +50,7 @@ async def get_invoice(
     key: str = None,
     page: int = 1,
     items: int = 1,
-    # current_user: UserData = Depends(GetCurrentUser),
+    current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     query = {}
@@ -69,12 +73,16 @@ async def get_invoice(
     )
 
 
-@router.get("/auto-generate")
+@router.get("/generate")
 async def auto_generate_invoice(
+    id_customer: str = None,
+    is_send_whatsapp: bool = True,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
     query = {}
+    if id_customer:
+        query["_id"] = ObjectId(id_customer)
 
     # add filter query
     pipeline.append({"$match": query})
@@ -221,7 +229,7 @@ async def auto_generate_invoice(
             {"type": "INVOICE_UNIQUE_CODE"},
             {"$set": {"value": current_unique_code}},
         )
-        if API_TOKEN:
+        if API_TOKEN and is_send_whatsapp:
             params = {
                 "api_key": API_TOKEN,
                 "sender": f"62{whatsapp_bot['bot_number']}",
@@ -242,54 +250,81 @@ async def auto_generate_invoice(
     )
 
 
-@router.post("/get-moota")
-async def get_moota(
-    # current_user: UserData = Depends(GetCurrentUser),
+@router.get("/print")
+async def print_invoice():
+    pdf_bytes = CreateInvoicePDF()
+    return StreamingResponse(
+        pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=Invoice-999.pdf"},
+    )
+
+
+@router.delete("/delete/{id}")
+async def delete_invoice(
+    id: str,
+    current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    response = await GetMootaMutationTracking()
-    # response = await GetDetailMootaMutation("PYM-674c29337acd9-674c29337acdb")
-    return response
+    exist_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+    if not exist_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    result = await DeleteOneData(db.invoices, {"_id": ObjectId(id)})
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
 
 
-@router.post("/add")
-async def create_invoice(
-    # current_user: UserData = Depends(GetCurrentUser),
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-):
-    # Data payload
-    data = {
-        "bank_account_id": "KXajel1LzGo",
-        "customers": {
-            "name": "Jhon Doe",
-            "email": "test@gmail.com",
-            "phone": "0812871827371",
-        },
-        "items": [
-            {
-                "name": "Air Mineral",
-                "description": "Air berkualitas",
-                "qty": 1,
-                "price": 10000,
-            }
-        ],
-        "total": 10000,
-    }
+# @router.post("/get-moota")
+# async def get_moota(
+#     # current_user: UserData = Depends(GetCurrentUser),
+#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+# ):
+#     response = await GetMootaMutationTracking()
+#     # response = await GetDetailMootaMutation("PYM-674c29337acd9-674c29337acdb")
+#     return response
 
-    # Headers
-    headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {MOOTA_API_TOKEN}",  # Token API Moota
-    }
 
-    # URL
-    # url = "https://app.moota.co/api/v2/mutation-tracking"
-    url = "https://app.moota.co/api/v2/mutation-tracking"
+# @router.post("/add")
+# async def create_invoice(
+#     # current_user: UserData = Depends(GetCurrentUser),
+#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+# ):
+#     # Data payload
+#     data = {
+#         "bank_account_id": "KXajel1LzGo",
+#         "customers": {
+#             "name": "Jhon Doe",
+#             "email": "test@gmail.com",
+#             "phone": "0812871827371",
+#         },
+#         "items": [
+#             {
+#                 "name": "Air Mineral",
+#                 "description": "Air berkualitas",
+#                 "qty": 1,
+#                 "price": 10000,
+#             }
+#         ],
+#         "total": 10000,
+#     }
 
-    # Kirim request POST
-    try:
-        response = requests.post(url, json=data, headers=headers)
-        # response.raise_for_status()  # Periksa jika ada error HTTP
-        return response.json()  # Parsing response ke JSON
-    except requests.exceptions.RequestException as e:
-        return {"error": str(e)}  # Return error dalam format dictionary
+#     # Headers
+#     headers = {
+#         "Accept": "application/json",
+#         "Authorization": f"Bearer {MOOTA_API_TOKEN}",  # Token API Moota
+#     }
+
+#     # URL
+#     # url = "https://app.moota.co/api/v2/mutation-tracking"
+#     url = "https://app.moota.co/api/v2/mutation-tracking"
+
+#     # Kirim request POST
+#     try:
+#         response = requests.post(url, json=data, headers=headers)
+#         # response.raise_for_status()  # Periksa jika ada error HTTP
+#         return response.json()  # Parsing response ke JSON
+#     except requests.exceptions.RequestException as e:
+#         return {"error": str(e)}  # Return error dalam format dictionary
