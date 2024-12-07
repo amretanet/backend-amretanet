@@ -34,9 +34,9 @@ router = APIRouter(prefix="/package", tags=["Layanan Paket"])
 async def get_packages(
     key: str = None,
     category: PackageCategoryData = None,
+    is_displayed: int = None,
     page: int = 1,
-    items: int = 1,
-    current_user: UserData = Depends(GetCurrentUser),
+    items: int = 10,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     query = {}
@@ -48,6 +48,10 @@ async def get_packages(
         ]
     if category:
         query["category"] = category
+
+    if is_displayed is not None:
+        query["is_displayed"] = is_displayed
+
     pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
 
     package_data, count = await GetManyData(

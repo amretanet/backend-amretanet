@@ -147,24 +147,24 @@ async def process_data(
     #         customer_data["id_user"] = result.inserted_id
     #         await CreateOneData(db.customers, customer_data)
 
-    return "berhasil"
     # UPDATE PACKAGE
-    # old_data, _ = await GetManyData(db.temp_package, [])
-    # for item in old_data:
-    #     package_data = {
-    #         "old_id": item["p_item_id"],
-    #         "name": item["name"],
-    #         "router_profile": item["paket_wifi"],
-    #         "bandwidth": 0,
-    #         "instalation_cost": 0,
-    #         "maximum_device": 0,
-    #         "price": {"regular": item["price"], "reseller": item["reseller"]},
-    #         "is_displayed": item["public"],
-    #         "description": item["description"] if "description" in item else "",
-    #     }
-    #     await CreateOneData(db.packages, package_data)
+    old_data, _ = await GetManyData(db.temp_package, [])
+    for item in old_data:
+        package_data = {
+            "old_id": item["p_item_id"],
+            "name": item["name"],
+            "router_profile": item["paket_wifi"],
+            "bandwidth": 0,
+            "instalation_cost": 0,
+            "maximum_device": 0,
+            "price": {"regular": item["price"], "reseller": item["reseller"]},
+            "is_displayed": item["public"],
+            "description": item["description"] if "description" in item else "",
+            "created_at": GetCurrentDateTime(),
+        }
+        await CreateOneData(db.packages, package_data)
 
-    # return "selesai"
+    return "selesai"
     # UPDATE AREA
     # odp_data, _ = await GetManyData(db.odp, [])
     # for item in odp_data:

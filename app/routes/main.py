@@ -15,10 +15,12 @@ from app.routes.v1 import (
     information_routes,
     user_routes,
     invoice_routes,
+    payment_routes,
 )
 
 router = APIRouter()
 router.include_router(auth_routes.router)
+router.include_router(payment_routes.router)
 router.include_router(invoice_routes.router)
 router.include_router(ticket_routes.router)
 router.include_router(whatsapp_message_routes.router)
