@@ -1,9 +1,11 @@
+import json
 from bson import ObjectId
 from fastapi import (
     APIRouter,
     Body,
     Depends,
     HTTPException,
+    Request,
 )
 from app.models.payments import PaymentInsertData
 from app.modules.response_message import NOT_FOUND_MESSAGE
@@ -136,3 +138,35 @@ async def create_payment(
         return None
     except requests.exceptions.RequestException:
         return None
+
+
+@router.post("/tripay/callback")
+async def tripay_callback(request: Request):
+    try:
+        # get callback signature
+        callback_signature = request.headers.get("x-callback-signature")
+        if not callback_signature:
+            raise HTTPException(status_code=400, detail="Signature not found")
+
+        body = await request.body()
+        callback_data = json.loads(body)
+
+        # verify signature
+        json_data = await request.json()
+        json_string = json.dumps(json_data, separators=(",", ":"))
+
+        # create signature
+        signature = hmac.new(
+            bytes(TRIPAY_PRIVATE_KEY, "latin-1"),
+            bytes(json_string, "latin-1"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        if callback_signature != signature:
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+        print(callback_data)
+
+        return JSONResponse(content={"success": True})
+    except Exception:
+        return JSONResponse(content={"Signature Not Found!"})

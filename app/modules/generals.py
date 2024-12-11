@@ -7,6 +7,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def DateIDFormatter(date):
+    if date is None:
+        return "-"
+
+    month_mapping = {
+        1: "Januari",
+        2: "Februari",
+        3: "Maret",
+        4: "April",
+        5: "Mei",
+        6: "Juni",
+        7: "Juli",
+        8: "Agustus",
+        9: "September",
+        10: "Oktober",
+        11: "November",
+        12: "Desember",
+    }
+    try:
+        formatted_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
+    except ValueError:
+        formatted_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    formatted_date = formatted_date.replace(microsecond=0)
+    formatted_date = f"{formatted_date.day:02d} {month_mapping[formatted_date.month]} {formatted_date.year}"
+    return formatted_date
+
+
+def ThousandSeparator(number):
+    return f"{number:,}".replace(",", ".")
+
+
 def AddURLHTTPProtocol(url):
     if not url.startswith(("http://", "https://")):
         url = f"http://{url}"

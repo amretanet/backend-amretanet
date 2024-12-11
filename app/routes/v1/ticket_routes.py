@@ -13,6 +13,7 @@ from app.modules.response_message import (
     SYSTEM_ERROR_MESSAGE,
 )
 from fastapi.responses import JSONResponse
+from app.models.notifications import NotificationTypeData
 from app.models.tickets import TicketInsertData, TicketStatusData, TicketUpdateData
 from app.models.users import UserData
 from app.models.generals import Pagination
@@ -138,7 +139,7 @@ async def create_ticket(
 ):
     payload = data.dict(exclude_unset=True)
     payload["name"] = f"TKT-{int(GetCurrentDateTime().timestamp())}"
-    payload["status"] = TicketStatusData.open
+    payload["status"] = TicketStatusData.OPEN
     payload["id_reporter"] = ObjectId(payload["id_reporter"])
     payload["id_assignee"] = ObjectId(payload["id_assignee"])
     if "id_odc" in payload:
@@ -187,6 +188,22 @@ async def update_ticket(
     result = await UpdateOneData(db.tickets, {"_id": ObjectId(id)}, {"$set": payload})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    if (
+        "id_assignee" in payload
+        and "id_assignee" in exist_data
+        and exist_data["id_assignee"] != str(payload["id_assignee"])
+    ) or ("id_assignee" not in exist_data):
+        notification_data = {
+            "title": exist_data["title"],
+            "id_user": payload["id_assignee"],
+            "description": exist_data["description"],
+            "type": NotificationTypeData.TICKET.value,
+            "is_read": 0,
+            "id_reporter": ObjectId(exist_data["id_reporter"]),
+            "created_at": GetCurrentDateTime(),
+        }
+        await CreateOneData(db.notifications, notification_data)
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 

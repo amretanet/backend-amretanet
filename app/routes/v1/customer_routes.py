@@ -6,7 +6,9 @@ from app.models.customers import (
     CustomerRegisterData,
     CustomerStatusData,
 )
+from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
+from app.models.tickets import TicketStatusData
 from app.models.users import UserData
 from app.modules.crud_operations import (
     CreateOneData,
@@ -330,11 +332,31 @@ async def register_customer(
         payload["status"] = CustomerStatusData.pending.value
         payload["created_at"] = GetCurrentDateTime()
         insert_customer_result = await CreateOneData(db.customers, payload)
-        if not insert_customer_result:
+        if not insert_customer_result.inserted_id:
             await DeleteOneData(db.users, {"email": user_data["email"]})
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
+        ticket_data = {
+            "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
+            "status": TicketStatusData.OPEN,
+            "id_reporter": insert_user_result.inserted_id,
+            "id_assignee": None,
+            "title": "Pemasangan Baru",
+            "description": "Instalasi jaringan baru untuk Customer",
+            "created_at": GetCurrentDateTime(),
+            "created_by": insert_user_result.inserted_id,
+        }
+        await CreateOneData(db.tickets, ticket_data)
+        notification_data = {
+            "title": "Pemasangan Baru",
+            "description": "Instalasi jaringan baru untuk Customer",
+            "type": NotificationTypeData.TICKET.value,
+            "is_read": 0,
+            "id_reporter": insert_user_result.inserted_id,
+            "created_at": GetCurrentDateTime(),
+        }
+        await CreateOneData(db.notifications, notification_data)
 
         return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 

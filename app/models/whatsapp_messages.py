@@ -9,10 +9,15 @@ class SendMessageType(str, Enum):
     single = "single"
 
 
-class SendMessageData(BaseModel):
-    type: SendMessageType
-    broadcast_to: Optional[str]
-    single_to: Optional[str]
+class SendSingleMessageData(BaseModel):
+    destination: str
+    title: str
+    message: str
+
+
+class SendBroadcastMessageData(BaseModel):
+    destination: str
+    group: str
     title: str
     message: str
 

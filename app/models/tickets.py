@@ -5,10 +5,10 @@ from enum import Enum
 
 # schema
 class TicketStatusData(str, Enum):
-    open = ("open",)
-    pending = "pending"
-    on_progress = "on_progress"
-    closed = "closed"
+    OPEN = "OPEN"
+    PENDING = "PENDING"
+    ON_PROGRESS = "ON_PROGRESS"
+    CLOSED = "CLOSED"
 
 
 class TicketInsertData(BaseModel):

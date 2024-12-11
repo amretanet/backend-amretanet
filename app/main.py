@@ -14,8 +14,9 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 app_version = os.environ["API_VERSION"]
 
-origins = os.environ["ORIGINS"].split(", ")
+# origins = os.environ["ORIGINS"].split(", ")
 
+origins = ["95.111.200.230"]
 app = FastAPI(
     title="Amreta Net RESTful API",
     description="RESTful API for Amreta Net Apps",
@@ -25,7 +26,7 @@ app.add_event_handler("startup", ConnectToMongoDB)
 app.add_event_handler("shutdown", DisconnectMongoDB)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

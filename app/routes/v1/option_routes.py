@@ -12,7 +12,7 @@ from app.models.options import (
 from app.modules.generals import AddURLHTTPProtocol
 from app.models.users import UserData
 from app.routes.v1.auth_routes import GetCurrentUser
-from app.modules.crud_operations import GetManyData, GetOneData
+from app.modules.crud_operations import GetDataCount, GetManyData, GetOneData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import requests
 import os
@@ -233,3 +233,127 @@ async def get_village_options(
         db.area_village, pipeline, VillageOptionProjections
     )
     return JSONResponse(content={"village_data": village_data})
+
+
+@router.get("/whatsapp-contact")
+async def get_whatsapp_contact_options(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    contact_count = await GetDataCount(db.users)
+    all_contact_data = [
+        {
+            "title": "Semua Kontak",
+            "count": contact_count,
+            "group": "user",
+            "value": "all",
+        }
+    ]
+    # by user
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$role",
+                "count": {"$sum": 1},
+            }
+        },
+    ]
+    user_data, _ = await GetManyData(db.users, pipeline)
+    user_data = [
+        {
+            "title": item["_id"],
+            "count": item["count"],
+            "group": "user",
+            "value": item["_id"],
+        }
+        for item in user_data
+    ]
+    # by package
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$id_package",
+                "count": {"$sum": 1},
+            }
+        },
+        {
+            "$lookup": {
+                "from": "packages",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "package",
+            }
+        },
+        {"$unwind": "$package"},
+    ]
+    package_data, _ = await GetManyData(db.customers, pipeline)
+    package_data = [
+        {
+            "title": item.get("package", "").get("name", "-"),
+            "count": item.get("count", 0),
+            "group": "package",
+            "value": item["_id"],
+        }
+        for item in package_data
+    ]
+    # by coverage area
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$id_coverage_area",
+                "count": {"$sum": 1},
+            }
+        },
+        {
+            "$lookup": {
+                "from": "coverage_areas",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "coverage_area",
+            }
+        },
+        {"$unwind": "$coverage_area"},
+    ]
+    coverage_area_data, _ = await GetManyData(db.customers, pipeline)
+    coverage_area_data = [
+        {
+            "title": item.get("coverage_area", "").get("name", "-"),
+            "count": item.get("count", 0),
+            "group": "coverage_area",
+            "value": item["_id"],
+        }
+        for item in coverage_area_data
+    ]
+    # by odp
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$id_odp",
+                "count": {"$sum": 1},
+            }
+        },
+        {
+            "$lookup": {
+                "from": "odp",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "odp",
+            }
+        },
+        {"$unwind": "$odp"},
+    ]
+    odp_data, _ = await GetManyData(db.customers, pipeline)
+    odp_data = [
+        {
+            "title": item.get("odp", "").get("name", "-"),
+            "count": item.get("count", 0),
+            "group": "odp",
+            "value": item["_id"],
+        }
+        for item in odp_data
+    ]
+
+    contact_options = (
+        all_contact_data + user_data + package_data + coverage_area_data + odp_data
+    )
+    return JSONResponse(content={"contact_options": contact_options})

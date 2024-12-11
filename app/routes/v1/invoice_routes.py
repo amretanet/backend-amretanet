@@ -14,7 +14,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
-from app.modules.pdf import CreateInvoicePDF
+from app.modules.pdf import CreateInvoicePDF, CreateInvoiceThermal
 from app.modules.moota import (
     CreateMootaMutation,
     GetMootaMutationTracking,
@@ -250,13 +250,51 @@ async def auto_generate_invoice(
     )
 
 
-@router.get("/print")
-async def print_invoice():
-    pdf_bytes = CreateInvoicePDF()
+@router.get("/pdf/{id}")
+async def print_invoice_pdf(
+    id: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+    if not invoice_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    customer_data = await GetOneData(
+        db.customers,
+        {"_id": ObjectId(invoice_data["id_customer"])},
+        {"name": 1, "email": 1, "phone_number": 1, "address": "$location.address"},
+    )
+    if customer_data:
+        invoice_data["customer"] = customer_data
+
+    pdf_bytes = CreateInvoicePDF(invoice_data)
+    file_name = (
+        f'INVOICE-{invoice_data.get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
+    )
     return StreamingResponse(
         pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=Invoice-999.pdf"},
+        headers={"Content-Disposition": f"attachment; filename={file_name}"},
+    )
+
+
+@router.get("/thermal/{id}")
+async def print_invoice_thermal(
+    id: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+    if not invoice_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    pdf_bytes = CreateInvoiceThermal(invoice_data)
+    file_name = (
+        f'INVOICE-{invoice_data.get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
+    )
+    return StreamingResponse(
+        pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={file_name}"},
     )
 
 
