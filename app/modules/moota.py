@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
-MOOTA_DEFAULT_BANK_ACCOUNT_ID = os.getenv("MOOTA_DEFAULT_BANK_ACCOUNT_ID")
+MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
 
 
 async def GetMootaMutationTracking():
@@ -40,7 +40,7 @@ async def GetDetailMootaMutation(trx_id: str):
 
 async def CreateMootaMutation(customer_name: str, item_name: str, ammount: int):
     data = {
-        "bank_account_id": MOOTA_DEFAULT_BANK_ACCOUNT_ID,
+        "bank_account_id": MOOTA_BANK_ACCOUNT_ID,
         "customers": {
             "name": customer_name,
         },

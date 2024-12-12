@@ -1,31 +1,28 @@
-from io import BytesIO
-from urllib.parse import urlencode, urljoin
+from datetime import timedelta
 from bson import ObjectId
-from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.generals import Pagination
-from app.models.router import RouterInsertData
 from app.models.users import UserData
 from app.modules.crud_operations import (
     CreateOneData,
-    DeleteManyData,
     DeleteOneData,
     GetManyData,
     GetOneData,
     UpdateOneData,
 )
+from app.models.payments import PaymentMethodData
 from app.modules.pdf import CreateInvoicePDF, CreateInvoiceThermal
-from app.modules.moota import (
-    CreateMootaMutation,
-    GetMootaMutationTracking,
-    GetDetailMootaMutation,
+from app.modules.mikrotik import ActivateMikrotikPPPSecret
+from app.modules.whatsapp_message import (
+    SendPaymentCreatedMessage,
+    SendPaymentSuccessMessage,
 )
+from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
-    DATA_HAS_INSERTED_MESSAGE,
-    DATA_HAS_UPDATED_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
@@ -33,14 +30,11 @@ from app.routes.v1.auth_routes import GetCurrentUser
 import os
 from dotenv import load_dotenv
 import requests
-from urllib.request import Request, urlopen
-from fpdf import FPDF
-from PIL import Image
 
 load_dotenv()
 
+# moota config
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
-
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
@@ -59,7 +53,7 @@ async def get_invoice(
             {"name": {"$regex": key, "$options": "i"}},
         ]
 
-    pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
+    pipeline = [{"$match": query}, {"$sort": {"created_at": -1}}]
 
     invoice_data, count = await GetManyData(
         db.invoices, pipeline, {}, {"page": page, "items": items}
@@ -74,13 +68,14 @@ async def get_invoice(
 
 
 @router.get("/generate")
-async def auto_generate_invoice(
+async def generate_invoice(
+    request: Request,
     id_customer: str = None,
     is_send_whatsapp: bool = True,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
-    query = {}
+    query = {"status": CustomerStatusData.active.value}
     if id_customer:
         query["_id"] = ObjectId(id_customer)
 
@@ -181,9 +176,6 @@ async def auto_generate_invoice(
     if len(customer_data) == 0:
         return ""
 
-    whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
-    API_URL = urljoin(whatsapp_bot.get("url_gateway", ""), "/send-message")
-    API_TOKEN = whatsapp_bot.get("api_key", None)
     invoice_exist = 0
     invoice_created = 0
     for customer in customer_data:
@@ -223,22 +215,19 @@ async def auto_generate_invoice(
             "created_at": GetCurrentDateTime(),
         }
 
-        await CreateOneData(db.invoices, invoice_data)
+        invoice_result = await CreateOneData(db.invoices, invoice_data)
+        if not invoice_result.inserted_id:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
         await UpdateOneData(
             db.configurations,
             {"type": "INVOICE_UNIQUE_CODE"},
             {"$set": {"value": current_unique_code}},
         )
-        if API_TOKEN and is_send_whatsapp:
-            params = {
-                "api_key": API_TOKEN,
-                "sender": f"62{whatsapp_bot['bot_number']}",
-                "number": "6281218030424",
-                "message": "Berikut Tagihan Ada : Rp.120000",
-                "is_html": True,
-            }
-            final_url = f"{API_URL}?{urlencode(params)}"
-            requests.post(final_url, json=params, timeout=10)
+        await SendPaymentCreatedMessage(
+            db, str(invoice_result.inserted_id), str(request.base_url)
+        )
 
         invoice_created += 1
 
@@ -298,6 +287,61 @@ async def print_invoice_thermal(
     )
 
 
+@router.get("/moota/auto-confirm")
+async def auto_confirm_moota_invoice(
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    confirmed = 0
+    duplicated = 0
+    query = {"status": {"$in": ["UNPAID", "PENDING"]}}
+    invoice_data, _ = await GetManyData(db.invoices, [{"$match": query}])
+    for invoice in invoice_data:
+        amount = invoice.get("amount", 0)
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {MOOTA_API_TOKEN}",
+        }
+        start_date = (GetCurrentDateTime() - timedelta(days=1)).strftime("%Y-%m-%d")
+        end_date = GetCurrentDateTime().strftime("%Y-%m-%d")
+        url = f"https://app.moota.co/api/v2/mutation?amount={amount}&start_date={start_date}&end_date={end_date}"
+        try:
+            response = requests.get(url, headers=headers)
+            response = response.json()
+            result = response.get("data", [])
+            if len(result) == 1:
+                await UpdateOneData(
+                    db.invoices,
+                    {"_id": ObjectId(invoice["_id"])},
+                    {
+                        "$set": {
+                            "status": "PAID",
+                            "payment": {"method": PaymentMethodData.TRANSFER.value},
+                        }
+                    },
+                )
+                confirmed += 1
+
+                # update customer status
+                await UpdateOneData(
+                    db.customers,
+                    {"_id": ObjectId(invoice["id_customer"])},
+                    {"$set": {"status": CustomerStatusData.active.value}},
+                )
+                customer_data = await GetOneData(
+                    db.customers, {"_id": ObjectId(invoice["id_customer"])}
+                )
+                if customer_data:
+                    await ActivateMikrotikPPPSecret(db, customer_data, False)
+                await SendPaymentSuccessMessage(db, invoice["_id"])
+            elif len(result) > 1:
+                duplicated += 1
+        except requests.exceptions.RequestException as e:
+            print(f"Error {str(e)}")
+
+    print(f"Confirmed: {confirmed}, Duplicate Amount: {duplicated}")
+    return JSONResponse(content={"message": "Auto Confirmed Telah Dijalankan!"})
+
+
 @router.delete("/delete/{id}")
 async def delete_invoice(
     id: str,
@@ -313,56 +357,3 @@ async def delete_invoice(
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
-
-
-# @router.post("/get-moota")
-# async def get_moota(
-#     # current_user: UserData = Depends(GetCurrentUser),
-#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-# ):
-#     response = await GetMootaMutationTracking()
-#     # response = await GetDetailMootaMutation("PYM-674c29337acd9-674c29337acdb")
-#     return response
-
-
-# @router.post("/add")
-# async def create_invoice(
-#     # current_user: UserData = Depends(GetCurrentUser),
-#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-# ):
-#     # Data payload
-#     data = {
-#         "bank_account_id": "KXajel1LzGo",
-#         "customers": {
-#             "name": "Jhon Doe",
-#             "email": "test@gmail.com",
-#             "phone": "0812871827371",
-#         },
-#         "items": [
-#             {
-#                 "name": "Air Mineral",
-#                 "description": "Air berkualitas",
-#                 "qty": 1,
-#                 "price": 10000,
-#             }
-#         ],
-#         "total": 10000,
-#     }
-
-#     # Headers
-#     headers = {
-#         "Accept": "application/json",
-#         "Authorization": f"Bearer {MOOTA_API_TOKEN}",  # Token API Moota
-#     }
-
-#     # URL
-#     # url = "https://app.moota.co/api/v2/mutation-tracking"
-#     url = "https://app.moota.co/api/v2/mutation-tracking"
-
-#     # Kirim request POST
-#     try:
-#         response = requests.post(url, json=data, headers=headers)
-#         # response.raise_for_status()  # Periksa jika ada error HTTP
-#         return response.json()  # Parsing response ke JSON
-#     except requests.exceptions.RequestException as e:
-#         return {"error": str(e)}  # Return error dalam format dictionary

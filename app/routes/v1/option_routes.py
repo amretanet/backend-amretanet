@@ -261,10 +261,10 @@ async def get_whatsapp_contact_options(
     user_data, _ = await GetManyData(db.users, pipeline)
     user_data = [
         {
-            "title": item["_id"],
+            "title": str(item["_id"]),
             "count": item["count"],
             "group": "user",
-            "value": item["_id"],
+            "value": str(item["_id"]),
         }
         for item in user_data
     ]

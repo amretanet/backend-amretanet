@@ -29,6 +29,10 @@ import os
 
 load_dotenv()
 
+# moota config
+MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
+MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
+# tripay
 TRIPAY_API_TOKEN = os.getenv("TRIPAY_API_TOKEN")
 TRIPAY_PRIVATE_KEY = os.getenv("TRIPAY_PRIVATE_KEY")
 TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
@@ -120,7 +124,7 @@ async def create_payment(
         response = response.get("data", None)
         if response:
             update_data = {
-                "status": "PENDING",
+                "status": "UNPAID",
                 "payment": {
                     "reference": response["reference"],
                     "name": response["payment_name"],
@@ -138,6 +142,22 @@ async def create_payment(
         return None
     except requests.exceptions.RequestException:
         return None
+
+
+@router.get("/moota/mutation")
+async def get_moota_mutation(amount: int = None):
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {MOOTA_API_TOKEN}",
+    }
+    url = "https://app.moota.co/api/v2/mutation?amount=170000"
+    # if amount is not None:
+
+    try:
+        response = requests.get(url, headers=headers)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return str(e)
 
 
 @router.post("/tripay/callback")

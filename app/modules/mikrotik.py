@@ -1,4 +1,5 @@
 from bson import ObjectId
+from fastapi.responses import JSONResponse
 from app.modules.generals import AddURLHTTPProtocol
 from app.modules.crud_operations import GetOneData
 from urllib.parse import urljoin
@@ -6,95 +7,100 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
-async def CreateMikrotikPPPSecret(
-    db,
-    id_router: str,
-    customer_name: str,
-    profile: str,
-    service_number: int,
-):
+async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
+    is_success = True
     try:
+        service_number = customer_data.get("service_number", None)
+        id_router = customer_data.get("id_router", None)
+
+        # check router
         exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
         if not exist_router:
-            return None
+            is_success = False
 
+        # setup mikrotik credentials
         host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
-        url = urljoin(host, "/rest/ppp/secret/add")
+        url = urljoin(host, f"/rest/ppp/secret?name={service_number}")
         username = exist_router.get("username", "")
         password = exist_router.get("password", "")
-        data = {
-            "name": service_number,
-            "password": service_number,
-            "service": "ppp",
-            "profile": profile,
-            "comment": customer_name,
-        }
 
-        response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
+        # get specified secret
+        response = requests.get(url, auth=HTTPBasicAuth(username, password))
         result = response.json()
-        if response.status_code == 200:
-            return result.get("ret", None)
+        secret_id = None
+        if len(result) > 0:
+            secret_id = result[0].get(".id", None)
 
-        return None
-    except Exception:
-        return None
+        if secret_id:
+            # update exist secret
+            data = {
+                "disabled": disabled,
+            }
+            url = urljoin(host, "/rest/ppp/secret")
+            response = requests.patch(
+                f"{url}/{secret_id}", json=data, auth=HTTPBasicAuth(username, password)
+            )
+            if response.status_code != 200:
+                is_success = False
+        else:
+            # create new secret data
+            package_data = await GetOneData(
+                db.packages, {"_id": ObjectId(customer_data.get("id_package", None))}
+            )
+            if not package_data:
+                is_success = False
+
+            secret_data = {
+                "name": service_number,
+                "password": service_number,
+                "service": "ppp",
+                "profile": package_data.get("router_profile", "default"),
+                "disabled": disabled,
+                "comment": customer_data.get("name", "Undefined"),
+            }
+            url = urljoin(host, "/rest/ppp/secret/add")
+            response = requests.post(
+                url, json=secret_data, auth=HTTPBasicAuth(username, password)
+            )
+            result = response.json()
+            if response.status_code != 200:
+                is_success = False
+
+    except Exception as e:
+        print(str(e))
+        is_success = False
+
+    return JSONResponse(content=is_success)
 
 
-async def UpdateMikrotikPPPSecret(
-    db,
-    id_secret: str,
-    id_router: str,
-    customer_name: str,
-    profile: str,
-    service_number: int,
-    disabled: bool,
-):
+async def DeleteMikrotikPPPSecret(db, customer_data):
     try:
+        id_router = customer_data.get("id_router", None)
+        service_number = customer_data.get("service_number", None)
+
+        # check router
         exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
         if not exist_router:
-            print("gaada router")
             return False
 
+        # setup mikrotik credentials
         host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
-        url = urljoin(host, "/rest/ppp/secret")
-        username = exist_router.get("username", "")
-        password = exist_router.get("password", "")
-        data = {
-            "name": service_number,
-            "password": service_number,
-            "service": "ppp",
-            "profile": profile,
-            "comment": customer_name,
-            "disabled": disabled,
-        }
-
-        response = requests.put(
-            f"{url}/{id_secret}", json=data, auth=HTTPBasicAuth(username, password)
-        )
-        if response.status_code == 201:
-            return True
-
-        return False
-    except Exception:
-        return False
-
-
-async def DeleteMikrotikPPPSecret(db, id_router: str, id_secret: str):
-    try:
-        exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
-        if not exist_router:
-            return False
-
-        host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
-        url = urljoin(host, "/rest/ppp/secret")
+        url = urljoin(host, f"/rest/ppp/secret?name={service_number}")
         username = exist_router.get("username", "")
         password = exist_router.get("password", "")
 
-        response = requests.delete(
-            f"{url}/{id_secret}", auth=HTTPBasicAuth(username, password)
-        )
-        if response.status_code == 200:
-            return True
-        return False
+        # get specified secret
+        response = requests.get(url, auth=HTTPBasicAuth(username, password))
+        result = response.json()
+        if len(result) > 0:
+            secret_id = result[0].get(".id", None)
+            url = urljoin(host, "/rest/ppp/secret")
+            response = requests.delete(
+                f"{url}/{secret_id}", auth=HTTPBasicAuth(username, password)
+            )
+            if response.status_code != 200:
+                return False
+
+        return True
     except Exception:
         return False

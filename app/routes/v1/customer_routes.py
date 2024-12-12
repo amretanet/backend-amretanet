@@ -9,7 +9,7 @@ from app.models.customers import (
 from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
 from app.models.tickets import TicketStatusData
-from app.models.users import UserData
+from app.models.users import UserData, UserStatusData
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
@@ -17,11 +17,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
-from app.modules.mikrotik import (
-    CreateMikrotikPPPSecret,
-    DeleteMikrotikPPPSecret,
-    UpdateMikrotikPPPSecret,
-)
+from app.modules.mikrotik import ActivateMikrotikPPPSecret, DeleteMikrotikPPPSecret
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime
 from app.modules.response_message import (
@@ -395,16 +391,6 @@ async def create_customer(
                 detail={"message": "Nomor Kartu Identitas Telah Digunakan!"},
             )
 
-        # check exist id card number
-        exist_phone_number = await GetOneData(
-            db.customers, {"phone_number": payload["phone_number"]}
-        )
-        if exist_phone_number:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "Nomor Telepon/Whatsapp Telah Digunakan!"},
-            )
-
         # check exist email
         exist_email = await GetOneData(db.users, {"email": payload["email"]})
         if exist_email:
@@ -444,14 +430,8 @@ async def create_customer(
             )
 
         # create id secret mikrotik
-        id_secret = await CreateMikrotikPPPSecret(
-            db,
-            payload["id_router"],
-            payload["name"],
-            package_data.get("router_profile", "default"),
-            payload["service_number"],
-        )
-        if not id_secret:
+        is_secret_created = await ActivateMikrotikPPPSecret(db, payload)
+        if not is_secret_created:
             await DeleteOneData(db.users, {"_id": insert_user_result.inserted_id})
             raise HTTPException(
                 status_code=404, detail={"message": "Gagal Membuat Secret Mikrotik!"}
@@ -459,7 +439,6 @@ async def create_customer(
 
         # formatting payload
         payload["id_user"] = insert_user_result.inserted_id
-        payload["id_secret"] = id_secret
         if "id_add_on_package" in payload:
             payload["id_add_on_package"] = [
                 ObjectId(item) for item in payload["id_add_on_package"]
@@ -518,17 +497,6 @@ async def update_customer(
                 detail={"message": "Nomor Kartu Identitas Telah Digunakan!"},
             )
 
-        # check exist id card number
-        exist_phone_number = await GetOneData(
-            db.customers,
-            {"phone_number": payload["phone_number"], "_id": {"$ne": ObjectId(id)}},
-        )
-        if exist_phone_number:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "Nomor Telepon/Whatsapp Telah Digunakan!"},
-            )
-
         # check exist email
         exist_email = await GetOneData(
             db.customers, {"email": payload["email"], "_id": {"$ne": ObjectId(id)}}
@@ -539,45 +507,8 @@ async def update_customer(
                 detail={"message": "Email Telah Digunakan!"},
             )
 
-        # check package profile
-        package_data = await GetOneData(
-            db.packages, {"_id": ObjectId(payload["id_package"])}
-        )
-        if not package_data:
-            raise HTTPException(
-                status_code=404, detail={"message": "Data Paket Tidak Ditemukan!"}
-            )
-
-        # update secret mikrotik
-        if "id_secret" in exist_data:
-            disabled = True if exist_data["status"] in [0, 4, 5] else False
-            is_secret_updated = await UpdateMikrotikPPPSecret(
-                db,
-                exist_data.get("id_secret", ""),
-                payload["id_router"],
-                payload["name"],
-                package_data.get("router_profile", "default"),
-                exist_data.get("service_number"),
-                disabled=disabled,
-            )
-            if not is_secret_updated:
-                id_secret = await CreateMikrotikPPPSecret(
-                    db,
-                    payload["id_router"],
-                    payload["name"],
-                    package_data.get("router_profile", "default"),
-                    exist_data.get("service_number"),
-                )
-                payload["id_secret"] = id_secret
-        else:
-            id_secret = await CreateMikrotikPPPSecret(
-                db,
-                payload["id_router"],
-                payload["name"],
-                package_data.get("router_profile", "default"),
-                exist_data.get("service_number"),
-            )
-            payload["id_secret"] = id_secret
+        # update mikrotik access
+        await ActivateMikrotikPPPSecret(db, payload)
 
         # formatting payload
         if "id_add_on_package" in payload:
@@ -596,7 +527,7 @@ async def update_customer(
             await UpdateOneData(
                 db.users,
                 {"_id": ObjectId(exist_data["id_user"])},
-                {"$set": {"status": CustomerStatusData.active}},
+                {"$set": {"status": UserStatusData.active}},
             )
 
         update_result = await UpdateOneData(
@@ -628,65 +559,26 @@ async def update_customer_status(
         if not exist_data:
             raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
-        # check package profile
-        package_data = await GetOneData(
-            db.packages, {"_id": ObjectId(exist_data["id_package"])}
-        )
-        if not package_data:
-            raise HTTPException(
-                status_code=404, detail={"message": "Data Paket Tidak Ditemukan!"}
-            )
-
         if status == CustomerStatusData.nonactive:
-            await DeleteMikrotikPPPSecret(
-                db, exist_data["id_router"], exist_data["id_secret"]
-            )
-            await UpdateOneData(
-                db.customers,
-                {"_id": ObjectId(id)},
-                {"$set": {"status": status}, "$unset": {"id_secret": ""}},
-            )
+            await DeleteMikrotikPPPSecret(db, exist_data)
         else:
             disabled = (
-                True
-                if status == CustomerStatusData.isolir
-                or status == CustomerStatusData.paid
-                else False
+                False
+                if status == CustomerStatusData.active
+                or status == CustomerStatusData.free
+                else True
             )
-            if "id_secret" in exist_data:
-                await UpdateMikrotikPPPSecret(
-                    db,
-                    exist_data.get("id_secret", ""),
-                    exist_data["id_router"],
-                    exist_data["name"],
-                    package_data.get("router_profile", "default"),
-                    exist_data["service_number"],
-                    disabled=disabled,
-                )
-                await UpdateOneData(
-                    db.customers,
-                    {"_id": ObjectId(id)},
-                    {"$set": {"status": status}},
-                )
-            else:
-                id_secret = await CreateMikrotikPPPSecret(
-                    db,
-                    exist_data["id_router"],
-                    exist_data["name"],
-                    package_data.get("router_profile", "default"),
-                    exist_data["service_number"],
-                )
-                if not id_secret:
-                    raise HTTPException(
-                        status_code=404,
-                        detail={"message": "Gagal Membuat Secret Mikrotik!"},
-                    )
+            await ActivateMikrotikPPPSecret(db, exist_data, disabled)
 
-                await UpdateOneData(
-                    db.customers,
-                    {"_id": ObjectId(id)},
-                    {"$set": {"status": status, "id_secret": id_secret}},
-                )
+        result = await UpdateOneData(
+            db.customers,
+            {"_id": ObjectId(id)},
+            {"$set": {"status": status}},
+        )
+        if not result:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
 
         return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
@@ -717,10 +609,7 @@ async def delete_customer(
         if "id_user" in exist_data:
             await DeleteOneData(db.users, {"_id": ObjectId(exist_data["id_user"])})
 
-        if "id_secret" in exist_data and "id_router" in exist_data:
-            await DeleteMikrotikPPPSecret(
-                db, exist_data["id_router"], exist_data["id_secret"]
-            )
+        await DeleteMikrotikPPPSecret(db, exist_data)
 
         return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
 
