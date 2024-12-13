@@ -59,7 +59,20 @@ async def get_invoice(
             {"name": {"$regex": key, "$options": "i"}},
         ]
 
-    pipeline = [{"$match": query}, {"$sort": {"created_at": -1}}]
+    pipeline = [
+        {"$match": query},
+        {
+            "$lookup": {
+                "from": "customers",
+                "localField": "id_customer",
+                "foreignField": "_id",
+                "pipeline": [{"$project": {"status": 1}}],
+                "as": "customer",
+            }
+        },
+        {"$unwind": "$customer"},
+        {"$sort": {"created_at": -1}},
+    ]
 
     invoice_data, count = await GetManyData(
         db.invoices, pipeline, {}, {"page": page, "items": items}
@@ -361,6 +374,64 @@ async def invoice_whatsapp_reminder(
         await SendPaymentReminderMessage(db, id.strip(), str(request.base_url))
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
+
+
+@router.get("/isolir-customer")
+async def isolir_customer(
+    encoded_id: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    id_list = base64.b64decode(encoded_id).decode("utf-8")
+    id_list = id_list.split(",")
+    for id in id_list:
+        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id.strip())})
+        if not invoice_data:
+            continue
+
+        customer_data = await GetOneData(
+            db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+        )
+        if not customer_data:
+            continue
+
+        await UpdateOneData(
+            db.customers,
+            {"_id": ObjectId(invoice_data["id_customer"])},
+            {"$set": {"status": CustomerStatusData.isolir.value}},
+        )
+        await ActivateMikrotikPPPSecret(db, customer_data, True)
+        await SendIsolirMessage(db, id.strip())
+
+    return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
+
+
+@router.get("/activate-customer")
+async def activate_customer(
+    encoded_id: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    id_list = base64.b64decode(encoded_id).decode("utf-8")
+    id_list = id_list.split(",")
+    for id in id_list:
+        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id.strip())})
+        if not invoice_data:
+            continue
+
+        customer_data = await GetOneData(
+            db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+        )
+        if not customer_data:
+            continue
+
+        await UpdateOneData(
+            db.customers,
+            {"_id": ObjectId(invoice_data["id_customer"])},
+            {"$set": {"status": CustomerStatusData.active.value}},
+        )
+        await ActivateMikrotikPPPSecret(db, customer_data, False)
+        await SendCustomerActivatedMessage(db, invoice_data["id_customer"])
+
+    return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
 
 @router.delete("/delete/{id}")

@@ -161,7 +161,10 @@ async def get_moota_mutation(amount: int = None):
 
 
 @router.post("/tripay/callback")
-async def tripay_callback(request: Request):
+async def tripay_callback(
+    request: Request,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
     try:
         # get callback signature
         callback_signature = request.headers.get("x-callback-signature")
@@ -184,6 +187,12 @@ async def tripay_callback(request: Request):
 
         if callback_signature != signature:
             raise HTTPException(status_code=403, detail="Invalid signature")
+
+        status = callback_data.get("status", None)
+        merchant_ref = callback_data.get("merchant_ref", None)
+
+        # if status == "PAID" and merchant_ref:
+        #     UpdateOneData(db.invoice,{"_id":ObjectId(merchant_ref)},{"$set"})
 
         print(callback_data)
 
