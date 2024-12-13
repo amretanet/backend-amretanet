@@ -1,6 +1,7 @@
+import base64
 from datetime import timedelta
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.generals import Pagination
 from app.models.users import UserData
@@ -15,7 +16,12 @@ from app.models.payments import PaymentMethodData
 from app.modules.pdf import CreateInvoicePDF, CreateInvoiceThermal
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.whatsapp_message import (
+    SendCustomerActivatedMessage,
+    SendCustomerRegisterMessage,
+    SendIsolirMessage,
     SendPaymentCreatedMessage,
+    SendPaymentOverdueMessage,
+    SendPaymentReminderMessage,
     SendPaymentSuccessMessage,
 )
 from app.models.customers import CustomerStatusData
@@ -174,7 +180,7 @@ async def generate_invoice(
 
     customer_data, _ = await GetManyData(db.customers, pipeline)
     if len(customer_data) == 0:
-        return ""
+        return
 
     invoice_exist = 0
     invoice_created = 0
@@ -225,9 +231,10 @@ async def generate_invoice(
             {"type": "INVOICE_UNIQUE_CODE"},
             {"$set": {"value": current_unique_code}},
         )
-        await SendPaymentCreatedMessage(
-            db, str(invoice_result.inserted_id), str(request.base_url)
-        )
+        if is_send_whatsapp:
+            await SendPaymentCreatedMessage(
+                db, str(invoice_result.inserted_id), str(request.base_url)
+            )
 
         invoice_created += 1
 
@@ -340,6 +347,20 @@ async def auto_confirm_moota_invoice(
 
     print(f"Confirmed: {confirmed}, Duplicate Amount: {duplicated}")
     return JSONResponse(content={"message": "Auto Confirmed Telah Dijalankan!"})
+
+
+@router.get("/whatsapp-reminder")
+async def invoice_whatsapp_reminder(
+    request: Request,
+    encoded_id: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    id_list = base64.b64decode(encoded_id).decode("utf-8")
+    id_list = id_list.split(",")
+    for id in id_list:
+        await SendPaymentReminderMessage(db, id.strip(), str(request.base_url))
+
+    return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
 
 @router.delete("/delete/{id}")

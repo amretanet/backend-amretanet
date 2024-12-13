@@ -2,7 +2,7 @@ from urllib.parse import urlencode, urljoin
 from bson import ObjectId
 import requests
 from app.modules.crud_operations import GetOneData
-from app.modules.generals import GetCurrentDateTime, ThousandSeparator
+from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
 
 MONTH_DICTIONARY = {
     1: "Januari",
@@ -23,6 +23,78 @@ MONTH_DICTIONARY = {
 def WhatsappMessageFormatter(title: str, body: str):
     formatted_message = f"*{title}*\n{body}"
     return formatted_message
+
+
+async def SendCustomerRegisterMessage(db, id_customer):
+    customer_data = await GetOneData(db.customers, {"_id": ObjectId(id_customer)})
+    whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
+    whatsapp_message = await GetOneData(
+        db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
+    )
+    if not customer_data or not whatsapp_bot or not whatsapp_message:
+        return
+    package_data = await GetOneData(
+        db.packages, {"_id": ObjectId(customer_data["id_package"])}
+    )
+    message = whatsapp_message.get("register", "")
+    fields_to_replace = {
+        "[nama_pelanggan]": customer_data.get("name", "-"),
+        "[no_ktp]": customer_data.get("id_card", "").get("number", "-"),
+        "[alamat]": customer_data.get("location", "").get("address", "-"),
+        "[nama_paket]": package_data.get("name", "-"),
+        "[harga]": ThousandSeparator(package_data.get("price", 0).get("regular", 0)),
+        "[tanggal_psb]": DateIDFormatter(customer_data.get("installed_at", "")),
+    }
+
+    for key, value in fields_to_replace.items():
+        try:
+            message = message.replace(key, str(value))
+        except Exception:
+            message = message.replace(key, "-")
+
+    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
+    API_TOKEN = whatsapp_bot["api_key"]
+    params = {
+        "api_key": API_TOKEN,
+        "sender": f"62{whatsapp_bot['bot_number']}",
+        "number": f"62{customer_data['phone_number']}",
+        "message": message,
+    }
+    final_url = f"{API_URL}?{urlencode(params)}"
+    requests.post(final_url, json=params, timeout=10)
+
+
+async def SendCustomerActivatedMessage(db, id_customer):
+    customer_data = await GetOneData(db.customers, {"_id": ObjectId(id_customer)})
+    whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
+    whatsapp_message = await GetOneData(
+        db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
+    )
+    if not customer_data or not whatsapp_bot or not whatsapp_message:
+        return
+
+    message = whatsapp_message.get("activate", "")
+    fields_to_replace = {
+        "[nama_pelanggan]": customer_data.get("name", "-"),
+        "[no_servis]": customer_data.get("service_number", "-"),
+    }
+
+    for key, value in fields_to_replace.items():
+        try:
+            message = message.replace(key, str(value))
+        except Exception:
+            message = message.replace(key, "-")
+
+    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
+    API_TOKEN = whatsapp_bot["api_key"]
+    params = {
+        "api_key": API_TOKEN,
+        "sender": f"62{whatsapp_bot['bot_number']}",
+        "number": f"62{customer_data['phone_number']}",
+        "message": message,
+    }
+    final_url = f"{API_URL}?{urlencode(params)}"
+    requests.post(final_url, json=params, timeout=10)
 
 
 async def SendPaymentCreatedMessage(db, id_invoice, service_url):
@@ -54,6 +126,133 @@ async def SendPaymentCreatedMessage(db, id_invoice, service_url):
         "[tahun_tagihan]": invoice_data.get("year"),
         "[link]": f"{service_url}invoice/pdf/{id_invoice}",
         "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
+    }
+
+    for key, value in fields_to_replace.items():
+        try:
+            message = message.replace(key, str(value))
+        except Exception:
+            message = message.replace(key, "-")
+
+    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
+    API_TOKEN = whatsapp_bot["api_key"]
+    params = {
+        "api_key": API_TOKEN,
+        "sender": f"62{whatsapp_bot['bot_number']}",
+        "number": f"62{customer_data['phone_number']}",
+        "message": message,
+    }
+    final_url = f"{API_URL}?{urlencode(params)}"
+    requests.post(final_url, json=params, timeout=10)
+
+
+async def SendPaymentReminderMessage(db, id_invoice, service_url):
+    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+    whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
+    whatsapp_message = await GetOneData(
+        db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
+    )
+    customer_data = await GetOneData(
+        db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+    )
+    if (
+        not invoice_data
+        or not whatsapp_bot
+        or not whatsapp_message
+        or not customer_data
+    ):
+        return
+
+    message = whatsapp_message.get("reminder", "")
+    fields_to_replace = {
+        "[nama_pelanggan]": customer_data.get("name", "-"),
+        "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
+        "[link]": f"{service_url}invoice/pdf/{id_invoice}",
+        "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
+    }
+
+    for key, value in fields_to_replace.items():
+        try:
+            message = message.replace(key, str(value))
+        except Exception:
+            message = message.replace(key, "-")
+
+    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
+    API_TOKEN = whatsapp_bot["api_key"]
+    params = {
+        "api_key": API_TOKEN,
+        "sender": f"62{whatsapp_bot['bot_number']}",
+        "number": f"62{customer_data['phone_number']}",
+        "message": message,
+    }
+    final_url = f"{API_URL}?{urlencode(params)}"
+    requests.post(final_url, json=params, timeout=10)
+
+
+async def SendPaymentOverdueMessage(db, id_invoice, service_url):
+    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+    whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
+    whatsapp_message = await GetOneData(
+        db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
+    )
+    customer_data = await GetOneData(
+        db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+    )
+    if (
+        not invoice_data
+        or not whatsapp_bot
+        or not whatsapp_message
+        or not customer_data
+    ):
+        return
+
+    message = whatsapp_message.get("overdue", "")
+    fields_to_replace = {
+        "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
+        "[nama_pelanggan]": customer_data.get("name", "-"),
+        "[no_servis]": customer_data.get("service_number", "-"),
+        "[link]": f"{service_url}invoice/pdf/{id_invoice}",
+    }
+
+    for key, value in fields_to_replace.items():
+        try:
+            message = message.replace(key, str(value))
+        except Exception:
+            message = message.replace(key, "-")
+
+    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
+    API_TOKEN = whatsapp_bot["api_key"]
+    params = {
+        "api_key": API_TOKEN,
+        "sender": f"62{whatsapp_bot['bot_number']}",
+        "number": f"62{customer_data['phone_number']}",
+        "message": message,
+    }
+    final_url = f"{API_URL}?{urlencode(params)}"
+    requests.post(final_url, json=params, timeout=10)
+
+
+async def SendIsolirMessage(db, id_invoice):
+    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+    whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
+    whatsapp_message = await GetOneData(
+        db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
+    )
+    customer_data = await GetOneData(
+        db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+    )
+    if (
+        not invoice_data
+        or not whatsapp_bot
+        or not whatsapp_message
+        or not customer_data
+    ):
+        return
+
+    message = whatsapp_message.get("isolir", "")
+    fields_to_replace = {
+        "[nama_pelanggan]": customer_data.get("name", "-"),
+        "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
     }
 
     for key, value in fields_to_replace.items():
