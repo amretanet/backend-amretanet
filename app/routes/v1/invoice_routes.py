@@ -7,6 +7,7 @@ from app.models.generals import Pagination
 from app.models.users import UserData
 from app.modules.crud_operations import (
     CreateOneData,
+    DeleteManyData,
     DeleteOneData,
     GetManyData,
     GetOneData,
@@ -48,6 +49,9 @@ router = APIRouter(prefix="/invoice", tags=["Invoice"])
 @router.get("")
 async def get_invoice(
     key: str = None,
+    month: str = None,
+    year: str = None,
+    status: str = None,
     page: int = 1,
     items: int = 1,
     current_user: UserData = Depends(GetCurrentUser),
@@ -58,6 +62,12 @@ async def get_invoice(
         query["$or"] = [
             {"name": {"$regex": key, "$options": "i"}},
         ]
+    if status:
+        query["status"] = status
+    if month:
+        query["month"] = month
+    if year:
+        query["year"] = year
 
     pipeline = [
         {"$match": query},
@@ -259,27 +269,44 @@ async def generate_invoice(
     )
 
 
-@router.get("/pdf/{id}")
+@router.get("/pdf")
 async def print_invoice_pdf(
     id: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
-    if not invoice_data:
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    pipeline = [
+        {"$match": {"_id": {"$in": id_list}}},
+        {
+            "$lookup": {
+                "from": "customers",
+                "localField": "id_customer",
+                "foreignField": "_id",
+                "pipeline": [
+                    {
+                        "$project": {
+                            "name": 1,
+                            "email": 1,
+                            "phone_number": 1,
+                            "address": "$location.address",
+                        },
+                    }
+                ],
+                "as": "customer",
+            }
+        },
+        {"$unwind": "$customer"},
+    ]
+    invoice_data, count = await GetManyData(db.invoices, pipeline)
+    if count == 0:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
-    customer_data = await GetOneData(
-        db.customers,
-        {"_id": ObjectId(invoice_data["id_customer"])},
-        {"name": 1, "email": 1, "phone_number": 1, "address": "$location.address"},
-    )
-    if customer_data:
-        invoice_data["customer"] = customer_data
-
     pdf_bytes = CreateInvoicePDF(invoice_data)
-    file_name = (
-        f'INVOICE-{invoice_data.get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
-    )
+    if count == 1:
+        file_name = f'INVOICE-{invoice_data[0].get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
+    else:
+        file_name = f"INVOICE-PELANGGAN-{GetCurrentDateTime().timestamp()}.pdf"
     return StreamingResponse(
         pdf_bytes,
         media_type="application/pdf",
@@ -287,19 +314,44 @@ async def print_invoice_pdf(
     )
 
 
-@router.get("/thermal/{id}")
+@router.get("/thermal")
 async def print_invoice_thermal(
     id: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
-    if not invoice_data:
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    pipeline = [
+        {"$match": {"_id": {"$in": id_list}}},
+        {
+            "$lookup": {
+                "from": "customers",
+                "localField": "id_customer",
+                "foreignField": "_id",
+                "pipeline": [
+                    {
+                        "$project": {
+                            "name": 1,
+                            "email": 1,
+                            "phone_number": 1,
+                            "address": "$location.address",
+                        },
+                    }
+                ],
+                "as": "customer",
+            }
+        },
+        {"$unwind": "$customer"},
+    ]
+    invoice_data, count = await GetManyData(db.invoices, pipeline)
+    if count == 0:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
     pdf_bytes = CreateInvoiceThermal(invoice_data)
-    file_name = (
-        f'INVOICE-{invoice_data.get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
-    )
+    if count == 1:
+        file_name = f'INVOICE-{invoice_data[0].get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
+    else:
+        file_name = f"INVOICE-PELANGGAN-{GetCurrentDateTime().timestamp()}.pdf"
     return StreamingResponse(
         pdf_bytes,
         media_type="application/pdf",
@@ -365,26 +417,26 @@ async def auto_confirm_moota_invoice(
 @router.get("/whatsapp-reminder")
 async def invoice_whatsapp_reminder(
     request: Request,
-    encoded_id: str,
+    id: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    id_list = base64.b64decode(encoded_id).decode("utf-8")
-    id_list = id_list.split(",")
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [item.strip() for item in decoded_id.split(",")]
     for id in id_list:
-        await SendPaymentReminderMessage(db, id.strip(), str(request.base_url))
+        await SendPaymentReminderMessage(db, id, str(request.base_url))
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
 
 @router.get("/isolir-customer")
 async def isolir_customer(
-    encoded_id: str,
+    id: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    id_list = base64.b64decode(encoded_id).decode("utf-8")
-    id_list = id_list.split(",")
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [item.strip() for item in decoded_id.split(",")]
     for id in id_list:
-        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id.strip())})
+        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
         if not invoice_data:
             continue
 
@@ -400,20 +452,20 @@ async def isolir_customer(
             {"$set": {"status": CustomerStatusData.isolir.value}},
         )
         await ActivateMikrotikPPPSecret(db, customer_data, True)
-        await SendIsolirMessage(db, id.strip())
+        await SendIsolirMessage(db, id)
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
 
 @router.get("/activate-customer")
 async def activate_customer(
-    encoded_id: str,
+    id: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    id_list = base64.b64decode(encoded_id).decode("utf-8")
-    id_list = id_list.split(",")
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [item.strip() for item in decoded_id.split(",")]
     for id in id_list:
-        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id.strip())})
+        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
         if not invoice_data:
             continue
 
@@ -434,17 +486,16 @@ async def activate_customer(
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
 
-@router.delete("/delete/{id}")
+@router.delete("/delete")
 async def delete_invoice(
     id: str,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    exist_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
-    if not exist_data:
-        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
 
-    result = await DeleteOneData(db.invoices, {"_id": ObjectId(id)})
+    result = await DeleteManyData(db.invoices, {"_id": {"$in": id_list}})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 

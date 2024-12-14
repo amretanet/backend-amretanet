@@ -370,16 +370,17 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
     pdf.cell(0, 6, "========================================", ln=True, align="C")
 
 
-def CreateInvoicePDF(data) -> BytesIO:
+def CreateInvoicePDF(data: list) -> BytesIO:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
+    for item in data:
+        pdf.add_page()
 
-    # create header
-    CreateInvoiceHeader(pdf)
+        # create header
+        CreateInvoiceHeader(pdf)
 
-    # create body
-    CreatePDFInvoiceBody(pdf, data)
+        # create body
+        CreatePDFInvoiceBody(pdf, item)
 
     # save to pdf
     pdf_bytes = BytesIO()
@@ -389,14 +390,15 @@ def CreateInvoicePDF(data) -> BytesIO:
     return pdf_bytes
 
 
-def CreateInvoiceThermal(data):
+def CreateInvoiceThermal(data: list):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    # create header
-    CreateInvoiceHeader(pdf, False)
-    # create body
-    CreateThermalInvoiceBody(pdf, data)
+    for item in data:
+        pdf.add_page()
+        # create header
+        CreateInvoiceHeader(pdf, False)
+        # create body
+        CreateThermalInvoiceBody(pdf, item)
 
     # save to pdf
     pdf_bytes = BytesIO()

@@ -1,3 +1,4 @@
+import base64
 from urllib.parse import urlencode, urljoin
 from bson import ObjectId
 import requests
@@ -115,16 +116,22 @@ async def SendPaymentCreatedMessage(db, id_invoice, service_url):
         return
 
     message = whatsapp_message.get("billing", "")
+    encoded_id = base64.b64encode(id_invoice.encode("utf-8")).decode("utf-8")
     fields_to_replace = {
+        "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
         "[nama_pelanggan]": customer_data.get("name", "-"),
         "[no_servis]": customer_data.get("service_number", "-"),
         "[nama_paket]": invoice_data.get("package", [])[0]["name"],
         "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
-        "[status]": "BELUM DIBAYAR",
         "[tgl_due_date]": customer_data.get("due_date", ""),
         "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
         "[tahun_tagihan]": invoice_data.get("year"),
-        "[link]": f"{service_url}invoice/pdf/{id_invoice}",
+        "[link]": f"{service_url}invoice/pdf?id={encoded_id}",
+        "[hari]": GetCurrentDateTime().strftime("%d"),
+        "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun]": GetCurrentDateTime().strftime("%Y"),
+        "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
+        "[thanks_wa]": whatsapp_message.get("advance", "").get("thanks_message", ""),
         "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
     }
 
@@ -164,10 +171,23 @@ async def SendPaymentReminderMessage(db, id_invoice, service_url):
         return
 
     message = whatsapp_message.get("reminder", "")
+    encoded_id = base64.b64encode(id_invoice.encode("utf-8")).decode("utf-8")
     fields_to_replace = {
         "[nama_pelanggan]": customer_data.get("name", "-"),
         "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
-        "[link]": f"{service_url}invoice/pdf/{id_invoice}",
+        "[link]": f"{service_url}invoice/pdf?id={encoded_id}",
+        "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
+        "[no_servis]": customer_data.get("service_number", "-"),
+        "[nama_paket]": invoice_data.get("package", [])[0]["name"],
+        "[status]": "BELUM DIBAYAR",
+        "[tgl_due_date]": customer_data.get("due_date", ""),
+        "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun_tagihan]": invoice_data.get("year"),
+        "[hari]": GetCurrentDateTime().strftime("%d"),
+        "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun]": GetCurrentDateTime().strftime("%Y"),
+        "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
+        "[thanks_wa]": whatsapp_message.get("advance", "").get("thanks_message", ""),
         "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
     }
 
@@ -207,11 +227,24 @@ async def SendPaymentOverdueMessage(db, id_invoice, service_url):
         return
 
     message = whatsapp_message.get("overdue", "")
+    encoded_id = base64.b64encode(id_invoice.encode("utf-8")).decode("utf-8")
     fields_to_replace = {
         "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
         "[nama_pelanggan]": customer_data.get("name", "-"),
         "[no_servis]": customer_data.get("service_number", "-"),
-        "[link]": f"{service_url}invoice/pdf/{id_invoice}",
+        "[link]": f"{service_url}invoice/pdf?id={encoded_id}",
+        "[nama_paket]": invoice_data.get("package", [])[0]["name"],
+        "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
+        "[status]": "BELUM DIBAYAR",
+        "[tgl_due_date]": customer_data.get("due_date", ""),
+        "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun_tagihan]": invoice_data.get("year"),
+        "[hari]": GetCurrentDateTime().strftime("%d"),
+        "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun]": GetCurrentDateTime().strftime("%Y"),
+        "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
+        "[thanks_wa]": whatsapp_message.get("advance", "").get("thanks_message", ""),
+        "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
     }
 
     for key, value in fields_to_replace.items():
@@ -253,6 +286,19 @@ async def SendIsolirMessage(db, id_invoice):
     fields_to_replace = {
         "[nama_pelanggan]": customer_data.get("name", "-"),
         "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
+        "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
+        "[no_servis]": customer_data.get("service_number", "-"),
+        "[nama_paket]": invoice_data.get("package", [])[0]["name"],
+        "[status]": "BELUM DIBAYAR",
+        "[tgl_due_date]": customer_data.get("due_date", ""),
+        "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun_tagihan]": invoice_data.get("year"),
+        "[hari]": GetCurrentDateTime().strftime("%d"),
+        "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun]": GetCurrentDateTime().strftime("%Y"),
+        "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
+        "[thanks_wa]": whatsapp_message.get("advance", "").get("thanks_message", ""),
+        "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
     }
 
     for key, value in fields_to_replace.items():
@@ -292,16 +338,21 @@ async def SendPaymentSuccessMessage(db, id_invoice):
 
     message = whatsapp_message.get("paid", "")
     fields_to_replace = {
+        "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
         "[nama_pelanggan]": customer_data.get("name", "-"),
         "[no_servis]": customer_data.get("service_number", "-"),
         "[nama_paket]": invoice_data.get("package", [])[0]["name"],
         "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
         "[status]": "SUDAH DIBAYAR",
+        "[tgl_due_date]": customer_data.get("due_date", ""),
+        "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
+        "[tahun_tagihan]": invoice_data.get("year"),
         "[hari]": GetCurrentDateTime().strftime("%d"),
         "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
         "[tahun]": GetCurrentDateTime().strftime("%Y"),
         "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
         "[thanks_wa]": whatsapp_message.get("advance", "").get("thanks_message", ""),
+        "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
     }
 
     for key, value in fields_to_replace.items():
