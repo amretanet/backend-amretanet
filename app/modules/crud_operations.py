@@ -76,8 +76,8 @@ async def CreateManyData(v_db_collection, v_data):
     return result
 
 
-async def UpdateOneData(v_db_collection, v_query, v_update):
-    result = await v_db_collection.update_one(v_query, v_update)
+async def UpdateOneData(v_db_collection, v_query, v_update, upsert: bool = False):
+    result = await v_db_collection.update_one(v_query, v_update, upsert)
     return result
 
 

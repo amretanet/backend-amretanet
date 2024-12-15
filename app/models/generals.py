@@ -23,6 +23,7 @@ class Location(BaseModel):
 
 
 class UploadImageType(str, Enum):
+    payment = "payment"
     odc = "odc"
     odp = "odp"
     id_card = "id_card"

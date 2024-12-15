@@ -1,3 +1,4 @@
+import base64
 import json
 from bson import ObjectId
 from fastapi import (
@@ -7,32 +8,44 @@ from fastapi import (
     HTTPException,
     Request,
 )
-from app.models.payments import PaymentInsertData
-from app.modules.response_message import NOT_FOUND_MESSAGE
+from app.models.incomes import IncomeCategoryData
+from app.models.notifications import NotificationTypeData
+from app.models.invoices import InvoiceStatusData
+from app.models.payments import (
+    PaymentPayOffData,
+    PaymentVAInsertData,
+    RequestConfirmData,
+)
+from app.models.customers import CustomerStatusData
+from app.modules.response_message import NOT_FOUND_MESSAGE, SYSTEM_ERROR_MESSAGE
 from fastapi.responses import JSONResponse
 from app.models.users import UserData
-from app.modules.generals import GetCurrentDateTime
+from app.modules.generals import DateIDFormatter, GetCurrentDateTime
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
-    CreateOneData,
     GetManyData,
     GetOneData,
-    UpdateManyData,
     UpdateOneData,
 )
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
+from app.models.payments import PaymentMethodData
+from app.modules.mikrotik import ActivateMikrotikPPPSecret
+from app.modules.whatsapp_message import (
+    SendPaymentSuccessMessage,
+)
 import requests
 from dotenv import load_dotenv
 import hashlib
 import hmac
 import os
+from datetime import timedelta
 
 load_dotenv()
 
 # moota config
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
-# tripay
+# tripay config
 TRIPAY_API_TOKEN = os.getenv("TRIPAY_API_TOKEN")
 TRIPAY_PRIVATE_KEY = os.getenv("TRIPAY_PRIVATE_KEY")
 TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
@@ -62,9 +75,260 @@ async def get_payment_channel(
         return channel_options
 
 
-@router.post("/add")
-async def create_payment(
-    data: PaymentInsertData = Body(..., embed=True),
+@router.put("/pay-off/{id}")
+async def pay_off_payment(
+    id: str,
+    data: PaymentPayOffData = Body(..., embed=True),
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+    if not invoice_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+    payload = data.dict(exclude_unset=True)
+    update_data = {
+        "status": InvoiceStatusData.PAID,
+        "payment": {
+            "method": payload["method"],
+            "description": payload["description"],
+            "confirmed_by": current_user.name,
+            "confirmed_at": GetCurrentDateTime(),
+        },
+    }
+    if "image_url" in payload:
+        update_data["payment"]["image_url"] = payload["image_url"]
+
+    result = await UpdateOneData(
+        db.invoices,
+        {"_id": ObjectId(id)},
+        {"$set": update_data},
+        upsert=True,
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    income_data = {
+        "id_invoice": ObjectId(id),
+        "nominal": invoice_data.get("amount", 0),
+        "category": IncomeCategoryData.INVOICE_PAYMENT.value,
+        "description": f'Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get("service_number","-")} a/n {invoice_data.get("name","-")}, Periode {DateIDFormatter(invoice_data.get("due_date"))}',
+        "method": payload["method"],
+        "date": GetCurrentDateTime(),
+        "received_by": ObjectId(current_user.id),
+        "created_at": GetCurrentDateTime(),
+    }
+    await UpdateOneData(
+        db.incomes, {"id_invoice": ObjectId(id)}, {"$set": income_data}, upsert=True
+    )
+
+    await SendPaymentSuccessMessage(db, id)
+
+    customer_data = await GetOneData(
+        db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+    )
+    if customer_data:
+        status = customer_data.get("status", None)
+        if status != CustomerStatusData.active and CustomerStatusData.free:
+            await UpdateOneData(
+                db.customers,
+                {"_id": ObjectId(invoice_data["id_customer"])},
+                {"$set": {"status": CustomerStatusData.active.value}},
+            )
+            await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+    return JSONResponse(content={"message": "Pembayaran Telah Dilunasi!"})
+
+
+@router.put("/confirm")
+async def confirm_payment(
+    id: str,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [item.strip() for item in decoded_id.split(",")]
+    for id in id_list:
+        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+        if not invoice_data:
+            continue
+
+        result = await UpdateOneData(
+            db.invoices,
+            {"_id": ObjectId(id)},
+            {
+                "$set": {
+                    "status": InvoiceStatusData.PAID,
+                    "payment.confirmed_by": current_user.name,
+                    "payment.confirmed_at": GetCurrentDateTime(),
+                }
+            },
+            upsert=True,
+        )
+        if not result:
+            continue
+        income_data = {
+            "id_invoice": ObjectId(id),
+            "nominal": invoice_data.get("amount", 0),
+            "category": IncomeCategoryData.INVOICE_PAYMENT.value,
+            "description": f'Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get("service_number","-")} a/n {invoice_data.get("name","-")}, Periode {DateIDFormatter(invoice_data.get("due_date"))}',
+            "method": PaymentMethodData.TRANSFER.value,
+            "date": GetCurrentDateTime(),
+            "received_by": ObjectId(current_user.id),
+            "created_at": GetCurrentDateTime(),
+        }
+        await UpdateOneData(
+            db.incomes, {"id_invoice": ObjectId(id)}, {"$set": income_data}, upsert=True
+        )
+
+        await SendPaymentSuccessMessage(db, id)
+
+        customer_data = await GetOneData(
+            db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+        )
+        if not customer_data:
+            continue
+
+        status = customer_data.get("status", None)
+        if status != CustomerStatusData.active and CustomerStatusData.free:
+            await UpdateOneData(
+                db.customers,
+                {"_id": ObjectId(invoice_data["id_customer"])},
+                {"$set": {"status": CustomerStatusData.active.value}},
+            )
+            await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+    return JSONResponse(content={"message": "Pembayaran Telah Dikonfirmasi!"})
+
+
+@router.get("/moota/mutation")
+async def get_moota_mutation(amount: int = None):
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {MOOTA_API_TOKEN}",
+    }
+    url = "https://app.moota.co/api/v2/mutation?amount=170000"
+    # if amount is not None:
+
+    try:
+        response = requests.get(url, headers=headers)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return str(e)
+
+
+@router.get("/moota/auto-confirm")
+async def auto_confirm_moota_invoice(
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    confirmed = 0
+    duplicated = 0
+    query = {"status": {"$in": ["UNPAID", "PENDING"]}}
+    invoice_data, _ = await GetManyData(db.invoices, [{"$match": query}])
+    for invoice in invoice_data:
+        amount = invoice.get("amount", 0)
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {MOOTA_API_TOKEN}",
+        }
+        start_date = (GetCurrentDateTime() - timedelta(days=3)).strftime("%Y-%m-%d")
+        end_date = GetCurrentDateTime().strftime("%Y-%m-%d")
+        url = f"https://app.moota.co/api/v2/mutation?amount={amount}&start_date={start_date}&end_date={end_date}"
+        try:
+            response = requests.get(url, headers=headers)
+            response = response.json()
+            result = response.get("data", [])
+            if len(result) == 1:
+                await UpdateOneData(
+                    db.invoices,
+                    {"_id": ObjectId(invoice["_id"])},
+                    {
+                        "$set": {
+                            "status": "PAID",
+                            "payment.method": PaymentMethodData.TRANSFER.value,
+                            "payment.paid_at": GetCurrentDateTime(),
+                        }
+                    },
+                )
+                confirmed += 1
+
+                # update customer status
+                await UpdateOneData(
+                    db.customers,
+                    {"_id": ObjectId(invoice["id_customer"])},
+                    {"$set": {"status": CustomerStatusData.active.value}},
+                )
+                customer_data = await GetOneData(
+                    db.customers, {"_id": ObjectId(invoice["id_customer"])}
+                )
+                if customer_data:
+                    await ActivateMikrotikPPPSecret(db, customer_data, False)
+                await SendPaymentSuccessMessage(db, invoice["_id"])
+            elif len(result) > 1:
+                await UpdateOneData(
+                    db.invoices,
+                    {"_id": ObjectId(invoice["_id"])},
+                    {"$set": {"status": "PENDING"}},
+                )
+                duplicated += 1
+        except requests.exceptions.RequestException as e:
+            print(f"Error {str(e)}")
+
+    print(f"Confirmed: {confirmed}, Duplicate Amount: {duplicated}")
+    return JSONResponse(content={"message": "Auto Confirmed Telah Dijalankan!"})
+
+
+@router.put("/request-confirm/{id_invoice}")
+async def request_confirm_payment(
+    id_invoice: str,
+    data: RequestConfirmData = Body(..., embed=True),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    try:
+        payload = data.dict(exclude_unset=True)
+        exist_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+        if not exist_data:
+            raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+        payload["paid_at"] = GetCurrentDateTime()
+
+        update_data = {
+            "status": InvoiceStatusData.PENDING.value,
+            "payment": payload,
+        }
+        result = await UpdateOneData(
+            db.invoices, {"_id": ObjectId(id_invoice)}, {"$set": update_data}
+        )
+        if not result:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
+        payment_notification_data = {
+            "id_invoice": ObjectId(id_invoice),
+            "type": NotificationTypeData.PAYMENT_CONFIRM.value,
+            "title": "Konfirmasi Pembayaran",
+            "description": f'{exist_data.get("name","Pelanggan")} melakukan konfirmasi pembayaran',
+            "is_read": 0,
+            "created_at": GetCurrentDateTime(),
+        }
+        await UpdateOneData(
+            db.notifications,
+            {"id_invoice": ObjectId(id_invoice)},
+            {"$set": payment_notification_data},
+            upsert=True,
+        )
+        return JSONResponse(
+            content={"message": "Permintaan Konfirmasi Pembayaran Telah Dikirimkan"}
+        )
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+
+@router.post("/virtual-account/add")
+async def create_virtual_account_payment(
+    data: PaymentVAInsertData = Body(..., embed=True),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
@@ -144,24 +408,8 @@ async def create_payment(
         return None
 
 
-@router.get("/moota/mutation")
-async def get_moota_mutation(amount: int = None):
-    headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {MOOTA_API_TOKEN}",
-    }
-    url = "https://app.moota.co/api/v2/mutation?amount=170000"
-    # if amount is not None:
-
-    try:
-        response = requests.get(url, headers=headers)
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        return str(e)
-
-
-@router.post("/tripay/callback")
-async def tripay_callback(
+@router.post("/virtual-account/callback")
+async def virtual_account_callback(
     request: Request,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -188,8 +436,8 @@ async def tripay_callback(
         if callback_signature != signature:
             raise HTTPException(status_code=403, detail="Invalid signature")
 
-        status = callback_data.get("status", None)
-        merchant_ref = callback_data.get("merchant_ref", None)
+        # status = callback_data.get("status", None)
+        # merchant_ref = callback_data.get("merchant_ref", None)
 
         # if status == "PAID" and merchant_ref:
         #     UpdateOneData(db.invoice,{"_id":ObjectId(merchant_ref)},{"$set"})
@@ -197,5 +445,6 @@ async def tripay_callback(
         print(callback_data)
 
         return JSONResponse(content={"success": True})
-    except Exception:
+    except Exception as e:
+        print("error", e)
         return JSONResponse(content={"Signature Not Found!"})

@@ -15,7 +15,7 @@ def InvoiceStatusFormatter(status: str):
     if status == "PAID":
         return "SUDAH DIBAYAR"
     elif status == "PENDING":
-        return "MENUNGGU PEMBAYARAN"
+        return "MENUNGGU KONFIRMASI"
     elif status == "UNPAID":
         return "BELUM DIBAYAR"
     elif status == "CONFIRM":

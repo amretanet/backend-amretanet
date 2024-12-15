@@ -1,47 +1,37 @@
 import base64
-from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from app.models.invoices import InvoiceStatusData, InvoiceUpdateData
+from app.models.payments import PaymentMethodData
 from app.models.generals import Pagination
 from app.models.users import UserData
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteManyData,
-    DeleteOneData,
     GetManyData,
     GetOneData,
+    UpdateManyData,
     UpdateOneData,
 )
-from app.models.payments import PaymentMethodData
 from app.modules.pdf import CreateInvoicePDF, CreateInvoiceThermal
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.whatsapp_message import (
     SendCustomerActivatedMessage,
-    SendCustomerRegisterMessage,
     SendIsolirMessage,
     SendPaymentCreatedMessage,
-    SendPaymentOverdueMessage,
     SendPaymentReminderMessage,
-    SendPaymentSuccessMessage,
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
+    DATA_HAS_UPDATED_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
 from app.routes.v1.auth_routes import GetCurrentUser
-import os
-from dotenv import load_dotenv
-import requests
-
-load_dotenv()
-
-# moota config
-MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
@@ -61,6 +51,15 @@ async def get_invoice(
     if key:
         query["$or"] = [
             {"name": {"$regex": key, "$options": "i"}},
+            {
+                "$expr": {
+                    "$regexMatch": {
+                        "input": {"$toString": "$service_number"},
+                        "regex": key,
+                        "options": "i",
+                    }
+                }
+            },
         ]
     if status:
         query["status"] = status
@@ -76,12 +75,14 @@ async def get_invoice(
                 "from": "customers",
                 "localField": "id_customer",
                 "foreignField": "_id",
-                "pipeline": [{"$project": {"status": 1}}],
+                "pipeline": [
+                    {"$project": {"status": 1, "id_package": 1, "id_add_on_package": 1}}
+                ],
                 "as": "customer",
             }
         },
         {"$unwind": "$customer"},
-        {"$sort": {"created_at": -1}},
+        {"$sort": {"due_date": -1}},
     ]
 
     invoice_data, count = await GetManyData(
@@ -98,7 +99,6 @@ async def get_invoice(
 
 @router.get("/generate")
 async def generate_invoice(
-    request: Request,
     id_customer: str = None,
     is_send_whatsapp: bool = True,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
@@ -255,9 +255,7 @@ async def generate_invoice(
             {"$set": {"value": current_unique_code}},
         )
         if is_send_whatsapp:
-            await SendPaymentCreatedMessage(
-                db, str(invoice_result.inserted_id), str(request.base_url)
-            )
+            await SendPaymentCreatedMessage(db, str(invoice_result.inserted_id))
 
         invoice_created += 1
 
@@ -359,71 +357,27 @@ async def print_invoice_thermal(
     )
 
 
-@router.get("/moota/auto-confirm")
-async def auto_confirm_moota_invoice(
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-):
-    confirmed = 0
-    duplicated = 0
-    query = {"status": {"$in": ["UNPAID", "PENDING"]}}
-    invoice_data, _ = await GetManyData(db.invoices, [{"$match": query}])
-    for invoice in invoice_data:
-        amount = invoice.get("amount", 0)
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {MOOTA_API_TOKEN}",
-        }
-        start_date = (GetCurrentDateTime() - timedelta(days=1)).strftime("%Y-%m-%d")
-        end_date = GetCurrentDateTime().strftime("%Y-%m-%d")
-        url = f"https://app.moota.co/api/v2/mutation?amount={amount}&start_date={start_date}&end_date={end_date}"
-        try:
-            response = requests.get(url, headers=headers)
-            response = response.json()
-            result = response.get("data", [])
-            if len(result) == 1:
-                await UpdateOneData(
-                    db.invoices,
-                    {"_id": ObjectId(invoice["_id"])},
-                    {
-                        "$set": {
-                            "status": "PAID",
-                            "payment": {"method": PaymentMethodData.TRANSFER.value},
-                        }
-                    },
-                )
-                confirmed += 1
-
-                # update customer status
-                await UpdateOneData(
-                    db.customers,
-                    {"_id": ObjectId(invoice["id_customer"])},
-                    {"$set": {"status": CustomerStatusData.active.value}},
-                )
-                customer_data = await GetOneData(
-                    db.customers, {"_id": ObjectId(invoice["id_customer"])}
-                )
-                if customer_data:
-                    await ActivateMikrotikPPPSecret(db, customer_data, False)
-                await SendPaymentSuccessMessage(db, invoice["_id"])
-            elif len(result) > 1:
-                duplicated += 1
-        except requests.exceptions.RequestException as e:
-            print(f"Error {str(e)}")
-
-    print(f"Confirmed: {confirmed}, Duplicate Amount: {duplicated}")
-    return JSONResponse(content={"message": "Auto Confirmed Telah Dijalankan!"})
-
-
 @router.get("/whatsapp-reminder")
 async def invoice_whatsapp_reminder(
-    request: Request,
-    id: str,
+    id: str = None,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    decoded_id = base64.b64decode(id).decode("utf-8")
-    id_list = [item.strip() for item in decoded_id.split(",")]
-    for id in id_list:
-        await SendPaymentReminderMessage(db, id, str(request.base_url))
+    if id:
+        decoded_id = base64.b64decode(id).decode("utf-8")
+        id_list = [item.strip() for item in decoded_id.split(",")]
+        for id in id_list:
+            await SendPaymentReminderMessage(db, id)
+    else:
+        invoice_data, _ = await GetManyData(
+            db.invoices,
+            [
+                {
+                    "$match": {"status": InvoiceStatusData.UNPAID.value},
+                },
+            ],
+        )
+        for item in invoice_data:
+            await SendPaymentReminderMessage(db, item["_id"])
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -484,6 +438,192 @@ async def activate_customer(
         await SendCustomerActivatedMessage(db, invoice_data["id_customer"])
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
+
+
+@router.put("/update")
+async def update_invoice(
+    data: InvoiceUpdateData = Body(..., embed=True),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    try:
+        payload = data.dict(exclude_unset=True)
+        invoice_data = await GetOneData(
+            db.invoices, {"_id": ObjectId(payload["id_invoice"])}
+        )
+        update_data = {
+            "id_package": ObjectId(payload["id_package"]),
+            "id_add_on_package": [
+                ObjectId(item) for item in payload["id_add_on_package"]
+            ]
+            if "id_add_on_package" in payload and len(payload["id_add_on_package"]) > 0
+            else [],
+        }
+        result = await UpdateOneData(
+            db.customers,
+            {"_id": ObjectId(payload["id_customer"])},
+            {"$set": update_data},
+        )
+        if not result:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
+
+        pipeline = []
+        query = {"_id": ObjectId(payload["id_customer"])}
+        # add filter query
+        pipeline.append({"$match": query})
+
+        # add join id package query
+        pipeline.append(
+            {
+                "$lookup": {
+                    "from": "packages",
+                    "localField": "id_package",
+                    "foreignField": "_id",
+                    "pipeline": [
+                        {
+                            "$project": {
+                                "name": 1,
+                                "price": 1,
+                            }
+                        },
+                        {"$limit": 1},
+                    ],
+                    "as": "package",
+                }
+            }
+        )
+        pipeline.append(
+            {
+                "$addFields": {
+                    "package_amount": {
+                        "$ifNull": [{"$arrayElemAt": ["$package.price.regular", 0]}, 0]
+                    }
+                }
+            }
+        )
+
+        # add join id add-on package query
+        pipeline.append(
+            {
+                "$lookup": {
+                    "from": "packages",
+                    "localField": "id_add_on_package",
+                    "foreignField": "_id",
+                    "pipeline": [
+                        {
+                            "$project": {
+                                "name": 1,
+                                "price": 1,
+                            }
+                        },
+                    ],
+                    "as": "add_on_packages",
+                }
+            }
+        )
+        pipeline.append(
+            {
+                "$addFields": {
+                    "add_on_package_amount": {
+                        "$sum": {
+                            "$map": {
+                                "input": "$add_on_packages",
+                                "as": "add_on",
+                                "in": {"$ifNull": ["$$add_on.price.regular", 0]},
+                            }
+                        }
+                    }
+                }
+            }
+        )
+
+        # counting package & add-on package price query
+        pipeline.append(
+            {
+                "$addFields": {
+                    "amount": {"$add": ["$package_amount", "$add_on_package_amount"]}
+                },
+            }
+        )
+
+        # add projection query
+        pipeline.append(
+            {
+                "$project": {
+                    "name": 1,
+                    "service_number": 1,
+                    "due_date": 1,
+                    "package": 1,
+                    "package_amount": 1,
+                    "add_on_packages": 1,
+                    "add_on_package_amount": 1,
+                    "amount": 1,
+                }
+            }
+        )
+
+        customer_data, _ = await GetManyData(db.customers, pipeline)
+        for customer in customer_data:
+            final_amount = customer["amount"] + invoice_data["unique_code"]
+            invoice_update_data = {
+                "package": customer["package"],
+                "add_on_packages": customer["add_on_packages"],
+                "package_amount": customer["package_amount"],
+                "add_on_package_amount": customer["add_on_package_amount"],
+                "amount": final_amount,
+            }
+
+            invoice_result = await UpdateOneData(
+                db.invoices,
+                {"_id": ObjectId(payload["id_invoice"])},
+                {"$set": invoice_update_data},
+            )
+            if not invoice_result:
+                raise HTTPException(
+                    status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+                )
+
+            return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+
+@router.put("/update/status")
+async def update_invoice_status(
+    id: str,
+    status: InvoiceStatusData,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    update_data = {}
+    if status == InvoiceStatusData.PAID.value:
+        update_data = {
+            "$set": {
+                "status": status,
+                "payment.method": PaymentMethodData.TRANSFER.value,
+                "payment.paid_at": GetCurrentDateTime(),
+            },
+        }
+    elif status == InvoiceStatusData.UNPAID.value:
+        update_data = {
+            "$set": {
+                "status": status,
+            },
+            "$unset": {
+                "payment": "",
+            },
+        }
+
+    result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 
 @router.delete("/delete")
