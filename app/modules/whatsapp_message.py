@@ -1,4 +1,4 @@
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode
 from bson import ObjectId
 import requests
 from app.modules.crud_operations import GetOneData
@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
+WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
+WHATSAPP_GATEWAY_URL = os.getenv("WHATSAPP_GATEWAY_URL")
 FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
 MONTH_DICTIONARY = {
     1: "Januari",
@@ -30,7 +33,7 @@ def WhatsappMessageFormatter(title: str, body: str):
     return formatted_message
 
 
-async def SendCustomerRegisterMessage(db, id_customer):
+async def SendWhatsappCustomerRegisterMessage(db, id_customer):
     customer_data = await GetOneData(db.customers, {"_id": ObjectId(id_customer)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -57,19 +60,17 @@ async def SendCustomerRegisterMessage(db, id_customer):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
-async def SendCustomerActivatedMessage(db, id_customer):
+async def SendWhatsappCustomerActivatedMessage(db, id_customer):
     customer_data = await GetOneData(db.customers, {"_id": ObjectId(id_customer)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -90,19 +91,17 @@ async def SendCustomerActivatedMessage(db, id_customer):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
-async def SendPaymentCreatedMessage(db, id_invoice):
+async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -139,19 +138,17 @@ async def SendPaymentCreatedMessage(db, id_invoice):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
-async def SendPaymentReminderMessage(db, id_invoice):
+async def SendWhatsappPaymentReminderMessage(db, id_invoice):
     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -182,19 +179,17 @@ async def SendPaymentReminderMessage(db, id_invoice):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
-async def SendPaymentOverdueMessage(db, id_invoice):
+async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -225,19 +220,17 @@ async def SendPaymentOverdueMessage(db, id_invoice):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
-async def SendIsolirMessage(db, id_invoice):
+async def SendWhatsappIsolirMessage(db, id_invoice):
     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -266,19 +259,17 @@ async def SendIsolirMessage(db, id_invoice):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
-async def SendPaymentSuccessMessage(db, id_invoice):
+async def SendWhatsappPaymentSuccessMessage(db, id_invoice):
     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
     whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
     whatsapp_message = await GetOneData(
@@ -315,13 +306,11 @@ async def SendPaymentSuccessMessage(db, id_invoice):
         except Exception:
             message = message.replace(key, "-")
 
-    API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-    API_TOKEN = whatsapp_bot["api_key"]
     params = {
-        "api_key": API_TOKEN,
-        "sender": f"62{whatsapp_bot['bot_number']}",
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    final_url = f"{API_URL}?{urlencode(params)}"
-    requests.post(final_url, json=params, timeout=10)
+    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    requests.post(whatsapp_api_url, json=params, timeout=10)

@@ -17,10 +17,10 @@ from app.modules.crud_operations import (
 from app.modules.pdf import CreateInvoicePDF, CreateInvoiceThermal
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.whatsapp_message import (
-    SendCustomerActivatedMessage,
-    SendIsolirMessage,
-    SendPaymentCreatedMessage,
-    SendPaymentReminderMessage,
+    SendWhatsappCustomerActivatedMessage,
+    SendWhatsappIsolirMessage,
+    SendWhatsappPaymentCreatedMessage,
+    SendWhatsappPaymentReminderMessage,
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
@@ -255,7 +255,7 @@ async def generate_invoice(
             {"$set": {"value": current_unique_code}},
         )
         if is_send_whatsapp:
-            await SendPaymentCreatedMessage(db, str(invoice_result.inserted_id))
+            await SendWhatsappPaymentCreatedMessage(db, str(invoice_result.inserted_id))
 
         invoice_created += 1
 
@@ -366,7 +366,7 @@ async def invoice_whatsapp_reminder(
         decoded_id = base64.b64decode(id).decode("utf-8")
         id_list = [item.strip() for item in decoded_id.split(",")]
         for id in id_list:
-            await SendPaymentReminderMessage(db, id)
+            await SendWhatsappPaymentReminderMessage(db, id)
     else:
         invoice_data, _ = await GetManyData(
             db.invoices,
@@ -377,7 +377,7 @@ async def invoice_whatsapp_reminder(
             ],
         )
         for item in invoice_data:
-            await SendPaymentReminderMessage(db, item["_id"])
+            await SendWhatsappPaymentReminderMessage(db, item["_id"])
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -406,7 +406,7 @@ async def isolir_customer(
             {"$set": {"status": CustomerStatusData.isolir.value}},
         )
         await ActivateMikrotikPPPSecret(db, customer_data, True)
-        await SendIsolirMessage(db, id)
+        await SendWhatsappIsolirMessage(db, id)
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
@@ -435,7 +435,7 @@ async def activate_customer(
             {"$set": {"status": CustomerStatusData.active.value}},
         )
         await ActivateMikrotikPPPSecret(db, customer_data, False)
-        await SendCustomerActivatedMessage(db, invoice_data["id_customer"])
+        await SendWhatsappCustomerActivatedMessage(db, invoice_data["id_customer"])
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 

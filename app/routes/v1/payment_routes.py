@@ -31,7 +31,7 @@ from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.models.payments import PaymentMethodData
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.whatsapp_message import (
-    SendPaymentSuccessMessage,
+    SendWhatsappPaymentSuccessMessage,
 )
 import requests
 from dotenv import load_dotenv
@@ -39,6 +39,10 @@ import hashlib
 import hmac
 import os
 from datetime import timedelta
+from app.modules.telegram_message import (
+    SendTelegramInstalationMessage,
+    SendTelegramPaymentMessage,
+)
 
 load_dotenv()
 
@@ -51,6 +55,13 @@ TRIPAY_PRIVATE_KEY = os.getenv("TRIPAY_PRIVATE_KEY")
 TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
 
 router = APIRouter(prefix="/payment", tags=["Payments"])
+
+
+@router.get("/testing-tele")
+async def testing_tele():
+    await SendTelegramInstalationMessage()
+    # await SendTelegramPaymentMessage()
+    return "masuk"
 
 
 @router.get("/channel")
@@ -121,7 +132,8 @@ async def pay_off_payment(
         db.incomes, {"id_invoice": ObjectId(id)}, {"$set": income_data}, upsert=True
     )
 
-    await SendPaymentSuccessMessage(db, id)
+    await SendWhatsappPaymentSuccessMessage(db, id)
+    await SendTelegramPaymentMessage(db, id)
 
     customer_data = await GetOneData(
         db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
@@ -180,7 +192,7 @@ async def confirm_payment(
             db.incomes, {"id_invoice": ObjectId(id)}, {"$set": income_data}, upsert=True
         )
 
-        await SendPaymentSuccessMessage(db, id)
+        await SendWhatsappPaymentSuccessMessage(db, id)
 
         customer_data = await GetOneData(
             db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
@@ -262,7 +274,7 @@ async def auto_confirm_moota_invoice(
                 )
                 if customer_data:
                     await ActivateMikrotikPPPSecret(db, customer_data, False)
-                await SendPaymentSuccessMessage(db, invoice["_id"])
+                await SendWhatsappPaymentSuccessMessage(db, invoice["_id"])
             elif len(result) > 1:
                 await UpdateOneData(
                     db.invoices,
