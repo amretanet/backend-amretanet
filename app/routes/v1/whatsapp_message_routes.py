@@ -5,13 +5,12 @@ from fastapi import (
     Depends,
     HTTPException,
 )
-from urllib.parse import urlencode, urljoin
 from app.models.whatsapp_messages import (
     AdvanceMessageTemplateData,
     SendBroadcastMessageData,
     SendSingleMessageData,
 )
-from app.modules.whatsapp_message import WhatsappMessageFormatter
+from app.modules.whatsapp_message import SendWhatsappMessage, WhatsappMessageFormatter
 from app.models.customers import CustomerStatusData
 from app.modules.response_message import (
     DATA_FORMAT_NOT_VALID_MESSAGE,
@@ -30,7 +29,14 @@ from app.modules.crud_operations import (
     UpdateOneData,
 )
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
+import os
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
+WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
 
 router = APIRouter(prefix="/whatsapp-message", tags=["Whatsapp Messages"])
 
@@ -159,20 +165,10 @@ async def send_single_message(
 ):
     try:
         payload = data.dict(exclude_unset=True)
-        whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
-        if not whatsapp_bot:
-            raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
-
-        API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-        API_TOKEN = whatsapp_bot["api_key"]
-        params = {
-            "api_key": API_TOKEN,
-            "sender": f"62{whatsapp_bot['bot_number']}",
-            "number": f"62{payload['destination']}",
-            "message": WhatsappMessageFormatter(payload["title"], payload["message"]),
-        }
-        final_url = f"{API_URL}?{urlencode(params)}"
-        response = requests.post(final_url, json=params, timeout=10)
+        response = await SendWhatsappMessage(
+            payload["destination"],
+            WhatsappMessageFormatter(payload["title"], payload["message"]),
+        )
         if response.status_code == 200:
             return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
 
@@ -192,12 +188,6 @@ async def send_broadcast_message(
 ):
     try:
         payload = data.dict(exclude_unset=True)
-        whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
-        if not whatsapp_bot:
-            raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
-
-        API_URL = urljoin(whatsapp_bot["url_gateway"], "/send-message")
-        API_TOKEN = whatsapp_bot["api_key"]
         contact_data = []
         if payload["group"] == "user":
             query = {}
@@ -230,16 +220,10 @@ async def send_broadcast_message(
             )
 
         for item in contact_data:
-            params = {
-                "api_key": API_TOKEN,
-                "sender": f"62{whatsapp_bot['bot_number']}",
-                "number": f"62{item['phone_number']}",
-                "message": WhatsappMessageFormatter(
-                    payload["title"], payload["message"]
-                ),
-            }
-            final_url = f"{API_URL}?{urlencode(params)}"
-            requests.post(final_url, json=params, timeout=10)
+            await SendWhatsappMessage(
+                item["phone_number"],
+                WhatsappMessageFormatter(payload["title"], payload["message"]),
+            )
 
         return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
     except HTTPException as http_err:

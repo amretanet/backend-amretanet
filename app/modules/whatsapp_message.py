@@ -1,4 +1,3 @@
-from urllib.parse import urlencode
 from bson import ObjectId
 import requests
 from app.modules.crud_operations import GetOneData
@@ -10,7 +9,6 @@ load_dotenv()
 
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
-WHATSAPP_GATEWAY_URL = os.getenv("WHATSAPP_GATEWAY_URL")
 FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
 MONTH_DICTIONARY = {
     1: "Januari",
@@ -31,6 +29,18 @@ MONTH_DICTIONARY = {
 def WhatsappMessageFormatter(title: str, body: str):
     formatted_message = f"*{title}*\n{body}"
     return formatted_message
+
+
+async def SendWhatsappMessage(destination_number, message):
+    params = {
+        "api_key": WHATSAPP_API_KEY,
+        "sender": WHATSAPP_BOT_NUMBER,
+        "number": f"62{destination_number}",
+        "message": message,
+    }
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+    response = requests.post(whatsapp_api_url, json=params, timeout=10)
+    return response
 
 
 async def SendWhatsappCustomerRegisterMessage(db, id_customer):
@@ -66,7 +76,7 @@ async def SendWhatsappCustomerRegisterMessage(db, id_customer):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
@@ -97,7 +107,7 @@ async def SendWhatsappCustomerActivatedMessage(db, id_customer):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
@@ -144,7 +154,7 @@ async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
@@ -185,7 +195,7 @@ async def SendWhatsappPaymentReminderMessage(db, id_invoice):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
@@ -226,7 +236,7 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
@@ -265,7 +275,7 @@ async def SendWhatsappIsolirMessage(db, id_invoice):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
 
 
@@ -312,5 +322,5 @@ async def SendWhatsappPaymentSuccessMessage(db, id_invoice):
         "number": f"62{customer_data['phone_number']}",
         "message": message,
     }
-    whatsapp_api_url = f"https://wa7.amretanet.my.id/send-message?{urlencode(params)}"
+    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
