@@ -1,6 +1,6 @@
 import base64
 from bson import ObjectId
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.invoices import InvoiceStatusData, InvoiceUpdateData
 from app.models.payments import PaymentMethodData
@@ -24,7 +24,7 @@ from app.modules.whatsapp_message import (
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GetCurrentDateTime
+from app.modules.generals import GetCurrentDateTime, GetDueDateRange
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
@@ -38,6 +38,7 @@ router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
 @router.get("")
 async def get_invoice(
+    id_customer: str = None,
     key: str = None,
     month: str = None,
     year: str = None,
@@ -48,6 +49,9 @@ async def get_invoice(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     query = {}
+    if id_customer:
+        query["id_customer"] = ObjectId(id_customer)
+
     if key:
         query["$or"] = [
             {"name": {"$regex": key, "$options": "i"}},
@@ -104,7 +108,10 @@ async def generate_invoice(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
-    query = {"status": CustomerStatusData.active.value}
+    query = {
+        "status": CustomerStatusData.active.value,
+        "due_date": {"$in": GetDueDateRange(10)},
+    }
     if id_customer:
         query["_id"] = ObjectId(id_customer)
 

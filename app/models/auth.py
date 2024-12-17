@@ -9,6 +9,7 @@ class Token(BaseModel):
     refresh_token: str
     token_type: str
     user_data: UserData
+    customer_data: Optional[dict] = None
 
 
 class TokenData(BaseModel):

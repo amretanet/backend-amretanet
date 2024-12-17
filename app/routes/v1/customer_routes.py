@@ -212,7 +212,8 @@ async def get_customer_detail(
 
 @router.get("/check-data/{key}")
 async def check_customer_data(
-    key: int, db: AsyncIOMotorClient = Depends(GetAmretaDatabase)
+    key: int,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     service_number = key
     phone_number = str(key)

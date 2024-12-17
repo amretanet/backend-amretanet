@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi.responses import JSONResponse
 from app.modules.crud_operations import CreateOneData, GetOneData, UpdateOneData
 from app.models.auth import RefreshTokenPayload, Token
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from fastapi import Depends, HTTPException, status, APIRouter, Request, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -140,8 +140,17 @@ async def login_for_access_token(
     }
     await CreateOneData(db.access_logs, access_log_payload)
     del user["password"]
+    if user["role"] == UserRole.customer:
+        customer_data = await GetOneData(
+            db.customers,
+            {"id_user": ObjectId(user["_id"])},
+            {"_id": 1, "name": 1, "service_number": 1},
+        )
+        if customer_data:
+            user["id_customer"] = customer_data["_id"]
+            user["service_number"] = customer_data["service_number"]
 
-    auth_data: Token = {
+    auth_data = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "Bearer",

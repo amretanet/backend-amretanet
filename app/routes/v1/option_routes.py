@@ -45,24 +45,66 @@ async def get_ticket_title_options(
     current_user: UserData = Depends(GetCurrentUser),
 ):
     ticket_title_options = [
-        "Gangguan Pada Jaringan",
-        "Pemasangan Baru",
-        "Jaringan Unspect",
-        "Pindah Alamat",
-        "Pergantian Alat",
-        "Jemput Pembayaran",
-        "Konfirmasi Layanan",
-        "Berhenti Berlangganan",
-        "Cek Coverage Area",
-        "Pendaftaran Refferal",
-        "Top up /Transfer Saldo",
-        "Pembangunan Baru",
-        "Migrasi ODC",
-        "Migrasi ODP",
-        "Cek ODC",
-        "Cek ODP",
-        "Perbaikan ODC",
-        "Perbaikan ODP",
+        {
+            "title": "Gangguan Pada Jaringan",
+            "type": "TKT",
+            "value": "Gangguan Pada Jaringan",
+        },
+        {
+            "title": "Pindah Alamat",
+            "type": "TKT",
+            "value": "Pindah Alamat",
+        },
+        {
+            "title": "Jemput Pembayaran",
+            "type": "TKT",
+            "value": "Jemput Pembayaran",
+        },
+        {
+            "title": "Berhenti Berlangganan",
+            "type": "TKT",
+            "value": "Berhenti Berlangganan",
+        },
+        {
+            "title": "Pergantian Alat",
+            "type": "TKT",
+            "value": "Pergantian Alat",
+        },
+        {
+            "title": "Cek Coverage Area",
+            "type": "FOM",
+            "value": "Cek Coverage Area",
+        },
+        {
+            "title": "Perbaikan ODC",
+            "type": "FOM",
+            "value": "Perbaikan ODC",
+        },
+        {
+            "title": "Perbaikan ODP",
+            "type": "FOM",
+            "value": "Perbaikan ODP",
+        },
+        {
+            "title": "Migrasi ODC",
+            "type": "FOM",
+            "value": "Migrasi ODC",
+        },
+        {
+            "title": "Migrasi ODP",
+            "type": "FOM",
+            "value": "Migrasi ODP",
+        },
+        {
+            "title": "Pembangunan Baru",
+            "type": "FOM",
+            "value": "Pembangunan Baru",
+        },
+        {
+            "title": "Pemasangan Baru",
+            "type": "PSB",
+            "value": "Pemasangan Baru",
+        },
     ]
 
     return JSONResponse(content={"ticket_title_options": ticket_title_options})

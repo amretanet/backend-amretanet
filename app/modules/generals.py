@@ -7,6 +7,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def GetDueDateRange(gap: int):
+    current_date = GetCurrentDateTime()
+    target_date = current_date + timedelta(days=gap)
+
+    current_day = current_date.day
+    target_day = target_date.day
+
+    if current_day <= target_day:
+        date_range = [str(day).zfill(2) for day in range(current_day, target_day + 1)]
+    else:
+        date_range = [str(day).zfill(2) for day in range(target_day, current_day + 1)]
+
+    return date_range
+
+
 def DateIDFormatter(date):
     if date is None:
         return "-"
