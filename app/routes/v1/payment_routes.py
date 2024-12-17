@@ -39,10 +39,7 @@ import hashlib
 import hmac
 import os
 from datetime import timedelta
-from app.modules.telegram_message import (
-    SendTelegramInstalationMessage,
-    SendTelegramPaymentMessage,
-)
+from app.modules.telegram_message import SendTelegramPaymentMessage
 
 load_dotenv()
 
@@ -55,13 +52,6 @@ TRIPAY_PRIVATE_KEY = os.getenv("TRIPAY_PRIVATE_KEY")
 TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
 
 router = APIRouter(prefix="/payment", tags=["Payments"])
-
-
-@router.get("/testing-tele")
-async def testing_tele():
-    await SendTelegramInstalationMessage()
-    # await SendTelegramPaymentMessage()
-    return "masuk"
 
 
 @router.get("/channel")

@@ -30,7 +30,6 @@ from app.modules.crud_operations import (
 )
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import os
-import requests
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -239,7 +240,10 @@ async def generate_invoice(
             "name": customer["name"],
             "service_number": customer["service_number"],
             "package": customer["package"],
-            "due_date": f"{GetCurrentDateTime().strftime('%Y-%m')}-{customer['due_date']} 00:00:00",
+            "due_date": datetime.strptime(
+                f"{datetime.now().strftime('%Y-%m')}-{customer['due_date']} 00:00:00",
+                "%Y-%m-%d %H:%M:%S",
+            ),
             "add_on_packages": customer["add_on_packages"],
             "month": GetCurrentDateTime().strftime("%m"),
             "year": GetCurrentDateTime().strftime("%Y"),
@@ -375,11 +379,20 @@ async def invoice_whatsapp_reminder(
         for id in id_list:
             await SendWhatsappPaymentReminderMessage(db, id)
     else:
+        from_date = (GetCurrentDateTime() + timedelta(days=5)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        to_date = (GetCurrentDateTime() + timedelta(days=5)).replace(
+            hour=23, minute=59, second=59, microsecond=0
+        )
         invoice_data, _ = await GetManyData(
             db.invoices,
             [
                 {
-                    "$match": {"status": InvoiceStatusData.UNPAID.value},
+                    "$match": {
+                        "status": InvoiceStatusData.UNPAID.value,
+                        "due_date": {"$gte": from_date, "$lte": to_date},
+                    },
                 },
             ],
         )
@@ -391,29 +404,56 @@ async def invoice_whatsapp_reminder(
 
 @router.get("/isolir-customer")
 async def isolir_customer(
-    id: str,
+    id: str = None,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    decoded_id = base64.b64decode(id).decode("utf-8")
-    id_list = [item.strip() for item in decoded_id.split(",")]
-    for id in id_list:
-        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
-        if not invoice_data:
-            continue
+    if id:
+        decoded_id = base64.b64decode(id).decode("utf-8")
+        id_list = [item.strip() for item in decoded_id.split(",")]
+        for id in id_list:
+            invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+            if not invoice_data:
+                continue
 
-        customer_data = await GetOneData(
-            db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
-        )
-        if not customer_data:
-            continue
+            customer_data = await GetOneData(
+                db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+            )
+            if not customer_data:
+                continue
 
-        await UpdateOneData(
-            db.customers,
-            {"_id": ObjectId(invoice_data["id_customer"])},
-            {"$set": {"status": CustomerStatusData.isolir.value}},
-        )
-        await ActivateMikrotikPPPSecret(db, customer_data, True)
-        await SendWhatsappIsolirMessage(db, id)
+            await UpdateOneData(
+                db.customers,
+                {"_id": ObjectId(invoice_data["id_customer"])},
+                {"$set": {"status": CustomerStatusData.isolir.value}},
+            )
+            await ActivateMikrotikPPPSecret(db, customer_data, True)
+            await SendWhatsappIsolirMessage(db, id)
+    else:
+        pipeline = [
+            {
+                "$match": {
+                    "status": InvoiceStatusData.UNPAID.value,
+                    "due_date": {"$lt": GetCurrentDateTime()},
+                }
+            }
+        ]
+        invoice_data, _ = await GetManyData(db.invoices, pipeline)
+        for invoice in invoice_data:
+            customer_data = await GetOneData(
+                db.customers, {"_id": ObjectId(invoice["id_customer"])}
+            )
+            if not customer_data:
+                continue
+
+            await UpdateOneData(
+                db.customers,
+                {"_id": ObjectId(invoice["id_customer"])},
+                {"$set": {"status": CustomerStatusData.isolir.value}},
+            )
+            await ActivateMikrotikPPPSecret(db, customer_data, True)
+            await SendWhatsappIsolirMessage(db, invoice["_id"])
+
+        return invoice_data
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
