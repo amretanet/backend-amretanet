@@ -1,5 +1,6 @@
 from bson import ObjectId
 import requests
+from app.models.tickets import TicketTypeData
 from app.modules.crud_operations import GetOneData
 from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
 import os
@@ -7,6 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+WHATSAPP_ADMIN_NUMBER = os.getenv("WHATSAPP_ADMIN_NUMBER")
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
 FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
@@ -324,3 +326,67 @@ async def SendWhatsappPaymentSuccessMessage(db, id_invoice):
     }
     whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
     requests.post(whatsapp_api_url, json=params, timeout=10)
+
+
+async def SendWhatsappTicketOpenMessage(db, id_ticket: str):
+    PHONE_NUMBERS = [WHATSAPP_ADMIN_NUMBER]
+    ticket_data = await GetOneData(db.tickets, {"_id": ObjectId(id_ticket)})
+    if not ticket_data:
+        return
+
+    assignee = await GetOneData(
+        db.users,
+        {"_id": ObjectId(ticket_data["id_assignee"])},
+        {"name": 1, "phone_number": 1},
+    )
+    if assignee:
+        PHONE_NUMBERS.append(assignee.get("phone_number"))
+        ticket_data["assignee"] = assignee
+
+    if ticket_data["type"] != TicketTypeData.FOM.value:
+        customer = await GetOneData(
+            db.customers,
+            {"id_user": ObjectId(ticket_data["id_reporter"])},
+            {"name": 1, "service_number": 1, "location": 1, "phone_number": 1},
+        )
+        if customer:
+            PHONE_NUMBERS.append(customer.get("phone_number"))
+            ticket_data["customer"] = customer
+
+    if "id_odc" in ticket_data and ticket_data["id_odc"] is not None:
+        odc = await GetOneData(db.odc, {"_id": ObjectId(ticket_data["id_odc"])})
+        if odc:
+            ticket_data["odc"] = odc
+    if "id_odp" in ticket_data and ticket_data["id_odp"] is not None:
+        odp = await GetOneData(db.odp, {"_id": ObjectId(ticket_data["id_odp"])})
+        if odp:
+            ticket_data["odp"] = odp
+
+    v_message = f'*Tiket OPEN - {ticket_data.get("title","")}*\n\n'
+    v_message += f'*Kode Tiket*: #{ticket_data.get("name","-")}\n'
+    if "assignee" in ticket_data:
+        v_message += f'*Teknisi*: {ticket_data.get("assignee","").get("name")}\n\n'
+    if "customer" in ticket_data:
+        v_message += f'*Nama Pelanggan*: {ticket_data.get("customer","").get("name")}\n'
+        v_message += (
+            f'*Nomor Layanan*: {ticket_data.get("customer","").get("service_number")}\n'
+        )
+        v_message += f'*Alamat*: {ticket_data.get("customer","").get("location","").get("address","-")}\n'
+    if "odc" in ticket_data:
+        v_message += f'*ODC*: {ticket_data.get("odc","").get("name")}\n'
+    if "odp" in ticket_data:
+        v_message += f'*ODP*: {ticket_data.get("odp","").get("name")}\n'
+    v_message += f'*Deskripsi*: {ticket_data.get("description","")}\n'
+    v_message += (
+        f'\n\nWaktu: {DateIDFormatter(ticket_data.get("created_at"),is_show_time=True)}'
+    )
+
+    for number in PHONE_NUMBERS:
+        params = {
+            "api_key": WHATSAPP_API_KEY,
+            "sender": WHATSAPP_BOT_NUMBER,
+            "number": f"62{number}",
+            "message": v_message,
+        }
+        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        requests.post(whatsapp_api_url, json=params, timeout=10)

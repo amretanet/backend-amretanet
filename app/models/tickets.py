@@ -11,6 +11,12 @@ class TicketStatusData(str, Enum):
     CLOSED = "CLOSED"
 
 
+class TicketTypeData(str, Enum):
+    FOM = "FOM"
+    PSB = "PSB"
+    TKT = "TKT"
+
+
 class TicketInsertData(BaseModel):
     id_reporter: str
     id_assignee: str
@@ -18,6 +24,7 @@ class TicketInsertData(BaseModel):
     id_odp: Optional[str] = None
     title: str
     description: str
+    type: TicketTypeData
 
 
 class TicketUpdateData(BaseModel):

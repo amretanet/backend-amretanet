@@ -643,6 +643,8 @@ async def update_invoice(
 async def update_invoice_status(
     id: str,
     status: InvoiceStatusData,
+    description: str = None,
+    current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     decoded_id = base64.b64decode(id).decode("utf-8")
@@ -652,8 +654,11 @@ async def update_invoice_status(
         update_data = {
             "$set": {
                 "status": status,
-                "payment.method": PaymentMethodData.TRANSFER.value,
+                "payment.method": PaymentMethodData.CASH.value,
+                "payment.description": description,
                 "payment.paid_at": GetCurrentDateTime(),
+                "payment.confirmed_by": current_user.email,
+                "payment.confirmed_at": GetCurrentDateTime(),
             },
         }
     elif status == InvoiceStatusData.UNPAID.value:

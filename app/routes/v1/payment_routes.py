@@ -54,6 +54,11 @@ TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
 router = APIRouter(prefix="/payment", tags=["Payments"])
 
 
+@router.get("/testing")
+async def testing(db: AsyncIOMotorClient = Depends(GetAmretaDatabase)):
+    await SendTelegramPaymentMessage(db, "67619a402db670d0e7bb672c")
+
+
 @router.get("/channel")
 async def get_payment_channel(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
@@ -92,7 +97,8 @@ async def pay_off_payment(
         "payment": {
             "method": payload["method"],
             "description": payload["description"],
-            "confirmed_by": current_user.name,
+            "paid_at": GetCurrentDateTime(),
+            "confirmed_by": current_user.email,
             "confirmed_at": GetCurrentDateTime(),
         },
     }
@@ -160,7 +166,7 @@ async def confirm_payment(
             {
                 "$set": {
                     "status": InvoiceStatusData.PAID,
-                    "payment.confirmed_by": current_user.name,
+                    "payment.confirmed_by": current_user.email,
                     "payment.confirmed_at": GetCurrentDateTime(),
                 }
             },

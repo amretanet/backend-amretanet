@@ -22,7 +22,7 @@ def GetDueDateRange(gap: int):
     return date_range
 
 
-def DateIDFormatter(date):
+def DateIDFormatter(date, is_show_time: bool = False):
     if date is None:
         return "-"
 
@@ -40,13 +40,24 @@ def DateIDFormatter(date):
         11: "November",
         12: "Desember",
     }
+
+    # Parsing tanggal
     try:
-        formatted_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
+        parsed_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
     except ValueError:
-        formatted_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-    formatted_date = formatted_date.replace(microsecond=0)
-    formatted_date = f"{formatted_date.day:02d} {month_mapping[formatted_date.month]} {formatted_date.year}"
-    return formatted_date
+        parsed_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+
+    # Format tanggal
+    date_part = (
+        f"{parsed_date.day:02d} {month_mapping[parsed_date.month]} {parsed_date.year}"
+    )
+    if is_show_time:
+        time_part = (
+            f"{parsed_date.hour:02d}:{parsed_date.minute:02d}:{parsed_date.second:02d}"
+        )
+        return f"{date_part} {time_part}"
+
+    return date_part
 
 
 def ThousandSeparator(number):

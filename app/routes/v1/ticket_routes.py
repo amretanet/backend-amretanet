@@ -13,6 +13,8 @@ from app.modules.response_message import (
     SYSTEM_ERROR_MESSAGE,
 )
 from fastapi.responses import JSONResponse
+from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
+from app.modules.telegram_message import SendTelegramTicketOpenMessage
 from app.models.notifications import NotificationTypeData
 from app.models.tickets import TicketInsertData, TicketStatusData, TicketUpdateData
 from app.models.users import UserData
@@ -138,20 +140,23 @@ async def create_ticket(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
-    payload["name"] = f"TKT-{int(GetCurrentDateTime().timestamp())}"
+    payload["name"] = f'{payload["type"].value}-{int(GetCurrentDateTime().timestamp())}'
     payload["status"] = TicketStatusData.OPEN
     payload["id_reporter"] = ObjectId(payload["id_reporter"])
     payload["id_assignee"] = ObjectId(payload["id_assignee"])
-    if "id_odc" in payload:
+    if "id_odc" in payload and payload["id_odc"] is not None:
         payload["id_odc"] = ObjectId(payload["id_odc"])
-    if "id_odp" in payload:
+    if "id_odp" in payload and payload["id_odp"] is not None:
         payload["id_odp"] = ObjectId(payload["id_odp"])
 
     payload["created_at"] = GetCurrentDateTime()
     payload["created_by"] = ObjectId(current_user.id)
     result = await CreateOneData(db.tickets, payload)
-    if not result:
+    if not result.inserted_id:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    await SendWhatsappTicketOpenMessage(db, str(result.inserted_id))
+    await SendTelegramTicketOpenMessage(db, str(result.inserted_id))
 
     return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 
@@ -168,16 +173,10 @@ async def update_ticket(
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
     if "id_assignee" in payload:
         payload["id_assignee"] = ObjectId(payload["id_assignee"])
-    if "id_odc" in payload:
-        if payload["id_odc"]:
-            payload["id_odc"] = ObjectId(payload["id_odc"])
-        else:
-            payload["id_odc"] = None
-    if "id_odp" in payload:
-        if payload["id_odp"]:
-            payload["id_odp"] = ObjectId(payload["id_odp"])
-        else:
-            payload["id_odp"] = None
+    if "id_odc" in payload and payload["id_odc"] is not None:
+        payload["id_odc"] = ObjectId(payload["id_odc"])
+    if "id_odp" in payload and payload["id_odp"] is not None:
+        payload["id_odp"] = ObjectId(payload["id_odp"])
 
     exist_data = await GetOneData(db.tickets, {"_id": ObjectId(id)})
     if not exist_data:
