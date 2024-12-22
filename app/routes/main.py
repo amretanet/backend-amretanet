@@ -16,10 +16,12 @@ from app.routes.v1 import (
     user_routes,
     invoice_routes,
     payment_routes,
+    income_routes,
 )
 
 router = APIRouter()
 router.include_router(auth_routes.router)
+router.include_router(income_routes.router)
 router.include_router(payment_routes.router)
 router.include_router(invoice_routes.router)
 router.include_router(ticket_routes.router)

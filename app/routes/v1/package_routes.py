@@ -27,7 +27,7 @@ from app.modules.crud_operations import (
 )
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 
-router = APIRouter(prefix="/package", tags=["Layanan Paket"])
+router = APIRouter(prefix="/package", tags=["Packages"])
 
 
 @router.get("")

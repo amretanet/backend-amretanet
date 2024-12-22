@@ -8,7 +8,6 @@ from fastapi import (
     HTTPException,
     Request,
 )
-from app.models.incomes import IncomeCategoryData
 from app.models.notifications import NotificationTypeData
 from app.models.invoices import InvoiceStatusData
 from app.models.payments import (
@@ -117,11 +116,11 @@ async def pay_off_payment(
     income_data = {
         "id_invoice": ObjectId(id),
         "nominal": invoice_data.get("amount", 0),
-        "category": IncomeCategoryData.INVOICE_PAYMENT.value,
+        "category": "BAYAR TAGIHAN",
         "description": f'Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get("service_number","-")} a/n {invoice_data.get("name","-")}, Periode {DateIDFormatter(invoice_data.get("due_date"))}',
         "method": payload["method"],
         "date": GetCurrentDateTime(),
-        "received_by": ObjectId(current_user.id),
+        "id_receiver": ObjectId(current_user.id),
         "created_at": GetCurrentDateTime(),
     }
     await UpdateOneData(
@@ -177,11 +176,11 @@ async def confirm_payment(
         income_data = {
             "id_invoice": ObjectId(id),
             "nominal": invoice_data.get("amount", 0),
-            "category": IncomeCategoryData.INVOICE_PAYMENT.value,
+            "category": "BAYAR TAGIHAN",
             "description": f'Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get("service_number","-")} a/n {invoice_data.get("name","-")}, Periode {DateIDFormatter(invoice_data.get("due_date"))}',
             "method": PaymentMethodData.TRANSFER.value,
             "date": GetCurrentDateTime(),
-            "received_by": ObjectId(current_user.id),
+            "id_receiver": ObjectId(current_user.id),
             "created_at": GetCurrentDateTime(),
         }
         await UpdateOneData(

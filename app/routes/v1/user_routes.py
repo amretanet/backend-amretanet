@@ -161,6 +161,19 @@ async def update_user(
     if not result.modified_count:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    await UpdateOneData(
+        db.customers,
+        {"id_user": ObjectId(id)},
+        {
+            "$set": {
+                "name": payload["name"],
+                "email": payload["email"],
+                "phone_number": payload["phone_number"],
+                "gender": payload["gender"],
+                "location.address": payload["address"],
+            }
+        },
+    )
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 

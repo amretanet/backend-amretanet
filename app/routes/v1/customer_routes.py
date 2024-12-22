@@ -277,16 +277,6 @@ async def register_customer(
                 detail={"message": "Nomor Kartu Identitas Telah Digunakan!"},
             )
 
-        # check exist id card number
-        exist_phone_number = await GetOneData(
-            db.customers, {"phone_number": payload["phone_number"]}
-        )
-        if exist_phone_number:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "Nomor Telepon/Whatsapp Telah Digunakan!"},
-            )
-
         # check exist email
         exist_email = await GetOneData(db.users, {"email": payload["email"]})
         if exist_email:
@@ -299,7 +289,7 @@ async def register_customer(
         user_data = {
             "name": payload["name"],
             "email": payload["email"],
-            # "password": pwd_context.hash(DEFAULT_PASSWORD),
+            "password": pwd_context.hash(DEFAULT_PASSWORD),
             "phone_number": payload["phone_number"],
             "status": CustomerStatusData.nonactive.value,
             "gender": payload["gender"],
@@ -523,14 +513,6 @@ async def update_customer(
         payload["updated_by"] = current_user.name
         payload["updated_at"] = GetCurrentDateTime()
 
-        if exist_data["status"] == CustomerStatusData.pending:
-            payload["status"] = CustomerStatusData.active
-            await UpdateOneData(
-                db.users,
-                {"_id": ObjectId(exist_data["id_user"])},
-                {"$set": {"status": UserStatusData.active}},
-            )
-
         update_result = await UpdateOneData(
             db.customers, {"_id": ObjectId(id)}, {"$set": payload}
         )
@@ -539,6 +521,21 @@ async def update_customer(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
 
+        update_user = {}
+        if "name" in payload:
+            update_user.update({"name": payload["name"]})
+        if "email" in payload:
+            update_user.update({"email": payload["email"]})
+        if "phone_number" in payload:
+            update_user.update({"phone_number": payload["phone_number"]})
+        if "gender" in payload:
+            update_user.update({"gender": payload["gender"]})
+        if "location" in payload and "address" in payload["location"]:
+            update_user.update({"address": payload["location"]["address"]})
+
+        await UpdateOneData(
+            db.users, {"_id": ObjectId(exist_data["id_user"])}, {"$set": update_user}
+        )
         return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
     except HTTPException as http_err:
@@ -580,7 +577,15 @@ async def update_customer_status(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
-
+        if (
+            status == CustomerStatusData.active
+            or status == CustomerStatusData.nonactive
+        ):
+            await UpdateOneData(
+                db.users,
+                {"_id": ObjectId(exist_data["id_user"])},
+                {"$set": {"status": status}},
+            )
         return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
     except HTTPException as http_err:

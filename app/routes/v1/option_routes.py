@@ -15,11 +15,21 @@ from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import GetDataCount, GetManyData, GetOneData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import requests
-import os
 from urllib.parse import urljoin
 from requests.auth import HTTPBasicAuth
 
 router = APIRouter(prefix="/options", tags=["Options"])
+
+
+@router.get("/income-category")
+async def get_income_category_options(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = [{"$group": {"_id": "$category", "name": {"$first": "$category"}}}]
+    income_category_options, _ = await GetManyData(db.incomes, pipeline)
+    income_category_options = [item["name"] for item in income_category_options]
+    return JSONResponse(content={"income_category_options": income_category_options})
 
 
 @router.get("/user")

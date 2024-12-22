@@ -1,13 +1,24 @@
+from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel
-from enum import Enum
 
 
 # schemas
-class IncomeCategoryData(str, Enum):
-    INVOICE_PAYMENT = "BAYAR TAGIHAN"
-    CASH_RECEIPT = "KASBON"
-    TOP_UP = "TOP UP"
-    TRANSFER = "TRANSFER"
-    PURCHASE = "PEMBELIAN ALAT"
-    SALARY = "GAJI KARYAWAN"
-    INVESTMENT = "INVESTASI"
+class IncomeInsertData(BaseModel):
+    id_invoice: Optional[str] = None
+    nominal: int
+    category: str
+    method: str
+    date: datetime
+    id_receiver: str
+    description: str
+
+
+class IncomeUpdateData(BaseModel):
+    id_invoice: Optional[str] = None
+    nominal: Optional[int] = None
+    category: Optional[str] = None
+    method: Optional[str] = None
+    date: Optional[datetime] = None
+    id_receiver: Optional[str] = None
+    description: Optional[str] = None

@@ -30,12 +30,13 @@ from app.modules.crud_operations import (
 )
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 
-router = APIRouter(prefix="/ticket", tags=["Layanan Tiket"])
+router = APIRouter(prefix="/ticket", tags=["Tickets"])
 
 
 @router.get("")
 async def get_tickets(
     key: str = None,
+    status: TicketStatusData = None,
     page: int = 1,
     items: int = 1,
     current_user: UserData = Depends(GetCurrentUser),
@@ -48,10 +49,11 @@ async def get_tickets(
             {"title": {"$regex": key, "$options": "i"}},
             {"description": {"$regex": key, "$options": "i"}},
         ]
-
+    if status:
+        query["status"] = status
     pipeline = [
         {"$match": query},
-        {"$sort": {"name": 1}},
+        {"$sort": {"created_at": -1}},
         {
             "$lookup": {
                 "from": "users",
@@ -107,6 +109,15 @@ async def get_tickets(
             }
         },
         {
+            "$lookup": {
+                "from": "customers",
+                "localField": "id_reporter",
+                "foreignField": "id_user",
+                "as": "customer",
+            }
+        },
+        {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
+        {
             "$addFields": {
                 "reporter": {
                     "$ifNull": [{"$arrayElemAt": ["$reporter.name", 0]}, None]
@@ -133,6 +144,21 @@ async def get_tickets(
     )
 
 
+@router.get("/stats")
+async def get_ticket_stats(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = []
+    pipeline.append({"$group": {"_id": "$status", "count": {"$sum": 1}}})
+    ticket_stats_data, _ = await GetManyData(db.tickets, pipeline)
+    response_stats = {}
+    for stats in ticket_stats_data:
+        response_stats.update({stats["_id"]: stats["count"]})
+
+    return JSONResponse(content={"ticket_stats_data": response_stats})
+
+
 @router.post("/add")
 async def create_ticket(
     data: TicketInsertData = Body(..., embed=True),
@@ -142,8 +168,9 @@ async def create_ticket(
     payload = data.dict(exclude_unset=True)
     payload["name"] = f'{payload["type"].value}-{int(GetCurrentDateTime().timestamp())}'
     payload["status"] = TicketStatusData.OPEN
-    payload["id_reporter"] = ObjectId(payload["id_reporter"])
     payload["id_assignee"] = ObjectId(payload["id_assignee"])
+    if "id_reporter" in payload and payload["id_reporter"]:
+        payload["id_reporter"] = ObjectId(payload["id_reporter"])
     if "id_odc" in payload and payload["id_odc"] is not None:
         payload["id_odc"] = ObjectId(payload["id_odc"])
     if "id_odp" in payload and payload["id_odp"] is not None:
@@ -169,7 +196,7 @@ async def update_ticket(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
-    if "id_reporter" in payload:
+    if "id_reporter" in payload and payload["id_reporter"]:
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
     if "id_assignee" in payload:
         payload["id_assignee"] = ObjectId(payload["id_assignee"])
@@ -205,6 +232,20 @@ async def update_ticket(
         await CreateOneData(db.notifications, notification_data)
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+
+
+@router.put("/close/{id}")
+async def close_ticket(
+    id: str,
+    data: None,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    payload = data.dict(exclude_unset=True)
+    exist_data = await GetOneData(db.tickets, {"_id": ObjectId(id)})
+    if not exist_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+    return "masuk"
 
 
 @router.delete("/delete/{id}")

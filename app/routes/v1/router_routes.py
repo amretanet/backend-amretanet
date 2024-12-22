@@ -24,7 +24,7 @@ from app.modules.response_message import (
 from app.routes.v1.auth_routes import GetCurrentUser
 
 
-router = APIRouter(prefix="/router", tags=["Router"])
+router = APIRouter(prefix="/router", tags=["Routers"])
 
 
 @router.get("")
