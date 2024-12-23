@@ -32,6 +32,21 @@ async def get_income_category_options(
     return JSONResponse(content={"income_category_options": income_category_options})
 
 
+@router.get("/expenditure-category")
+async def get_expenditure_category_options(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = [{"$group": {"_id": "$category", "name": {"$first": "$category"}}}]
+    expenditure_category_options, _ = await GetManyData(db.expenditures, pipeline)
+    expenditure_category_options = [
+        item["name"] for item in expenditure_category_options
+    ]
+    return JSONResponse(
+        content={"expenditure_category_options": expenditure_category_options}
+    )
+
+
 @router.get("/user")
 async def get_user_options(
     role: int = None,
