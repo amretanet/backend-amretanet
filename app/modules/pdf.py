@@ -30,7 +30,7 @@ def ConvertImage(input_path: str, output_path: str):
 
 
 def CreateInvoiceHeader(pdf: FPDF, show_line: bool = True):
-    logo_path = urljoin(PROJECT_PATH, "assets/images/utils/short-logo.png")
+    logo_path = urljoin(PROJECT_PATH, "utils/short-logo.png")
     # convert logo
     try:
         temp_logo_path = "/tmp/converted_image.png"

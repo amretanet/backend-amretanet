@@ -4,3 +4,4 @@ app/**/*.pyc
 docker-compose.yaml
 Dockerfile
 local_requirements.txt
+assets

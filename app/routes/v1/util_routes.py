@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
-STATIC_DIR = Path("assets/images")
+STATIC_DIR = Path("assets")
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/utility", tags=["Utility"])
