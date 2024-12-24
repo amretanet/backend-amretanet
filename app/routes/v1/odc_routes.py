@@ -12,7 +12,7 @@ from app.modules.crud_operations import (
     UpdateOneData,
 )
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GetCurrentDateTime
+from app.modules.generals import GetCurrentDateTime, RemoveFilePath
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
@@ -118,6 +118,9 @@ async def update_odc(
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    if payload.get("image_url", "") != exist_data.get("exist_data", ""):
+        RemoveFilePath(exist_data.get("image_url", ""))
+
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 
@@ -134,5 +137,7 @@ async def delete_odc(
     result = await DeleteOneData(db.odc, {"_id": ObjectId(id)})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    RemoveFilePath(exist_data.get("image_url", ""))
 
     return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})

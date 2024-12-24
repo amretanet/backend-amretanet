@@ -1,11 +1,24 @@
 from datetime import datetime, timedelta
 import hashlib
+from pathlib import Path
+from urllib.parse import urlparse
 from bson import ObjectId
 import pytz
 from typing import Any
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def RemoveFilePath(file_path: str):
+    parsed_url = urlparse(file_path)
+    static_path = parsed_url.path
+    file_path = Path(static_path.lstrip("/"))
+    file = Path(file_path)
+    if file.exists() and file.is_file():
+        file.unlink()
+
+    return "File Telah Dihapus!"
 
 
 def GenerateReferralCode(unique_data):

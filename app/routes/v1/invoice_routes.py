@@ -25,7 +25,7 @@ from app.modules.whatsapp_message import (
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GetCurrentDateTime, GetDueDateRange
+from app.modules.generals import GetCurrentDateTime, GetDueDateRange, RemoveFilePath
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
@@ -111,7 +111,7 @@ async def generate_invoice(
     pipeline = []
     query = {
         "status": CustomerStatusData.active.value,
-        # "due_date": {"$in": GetDueDateRange(10)},
+        "due_date": {"$in": GetDueDateRange(10)},
     }
     if id_customer:
         query["_id"] = ObjectId(id_customer)
@@ -662,6 +662,15 @@ async def update_invoice_status(
             },
         }
     elif status == InvoiceStatusData.UNPAID.value:
+        for id in id_list:
+            exist_data = await GetOneData(db.invoices, {"_id": id})
+            if (
+                exist_data
+                and "payment" in exist_data
+                and "image_url" in exist_data["payment"]
+            ):
+                RemoveFilePath(exist_data["payment"]["image_url"])
+
         update_data = {
             "$set": {
                 "status": status,
@@ -686,6 +695,14 @@ async def delete_invoice(
 ):
     decoded_id = base64.b64decode(id).decode("utf-8")
     id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    for id in id_list:
+        exist_data = await GetOneData(db.invoices, {"_id": id})
+        if (
+            exist_data
+            and "payment" in exist_data
+            and "image_url" in exist_data["payment"]
+        ):
+            RemoveFilePath(exist_data["payment"]["image_url"])
 
     result = await DeleteManyData(db.invoices, {"_id": {"$in": id_list}})
     if not result:
