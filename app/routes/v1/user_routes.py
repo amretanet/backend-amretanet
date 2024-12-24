@@ -19,6 +19,7 @@ from app.models.users import (
 from app.models.users import UserProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import (
+    GenerateReferralCode,
     GetCurrentDateTime,
     ObjectIDValidator,
 )
@@ -69,7 +70,11 @@ async def get_users(
     if role:
         query["role"] = role
 
-    pipeline = [{"$match": query}, {"$sort": {"role": 1, "name": 1}}]
+    pipeline = [
+        {"$match": query},
+        {"$sort": {"role": 1, "name": 1}},
+        {"$unset": ["password"]},
+    ]
 
     user_data, count = await GetManyData(
         db.users, pipeline, UserProjections, {"page": page, "items": items}
@@ -115,20 +120,9 @@ async def create_user(
             status_code=400, detail={"message": "Email Telah Tersedia!"}
         )
 
+    payload["referral"] = GenerateReferralCode(payload["email"])
     payload["created_at"] = GetCurrentDateTime()
-    # payload["password"] = await RSADecryption(payload["password"])
     payload["password"] = pwd_context.hash(payload["password"])
-    if payload["role"] != UserRole.customer:
-        payload["ref_code"] = 240801000000
-        latest_ref_code = await GetOneData(
-            db.users,
-            {"ref_code": {"$exists": True}},
-            sort_by="ref_code",
-            sort_direction=-1,
-        )
-        if latest_ref_code:
-            payload["ref_code"] = int(latest_ref_code["ref_code"]) + 1
-
     result = await CreateOneData(db.users, payload)
     if not result.inserted_id:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
@@ -228,8 +222,6 @@ async def change_password(
     payload = data.dict(exclude_unset=True)
     new_password = payload["new_password"]
     confirm_new_password = payload["confirm_new_password"]
-    # new_password = await RSADecryption(payload["new_password"])
-    # confirm_new_password = await RSADecryption(payload["confirm_new_password"])
     if not new_password == confirm_new_password:
         raise HTTPException(
             status_code=400, detail={"message": "Konfirmasi Password Tidak Sesuai!"}

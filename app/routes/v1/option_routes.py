@@ -60,7 +60,9 @@ async def get_user_options(
     pipeline = [{"$match": query}, {"$sort": {"role": 1, "name": -1}}]
 
     user_options, _ = await GetManyData(
-        db.users, pipeline, {"_id": 0, "title": "$name", "value": "$_id", "role": 1}
+        db.users,
+        pipeline,
+        {"_id": 0, "title": "$name", "value": "$_id", "role": 1, "referral": 1},
     )
     return JSONResponse(content={"user_options": user_options})
 

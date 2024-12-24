@@ -111,7 +111,7 @@ async def generate_invoice(
     pipeline = []
     query = {
         "status": CustomerStatusData.active.value,
-        "due_date": {"$in": GetDueDateRange(10)},
+        # "due_date": {"$in": GetDueDateRange(10)},
     }
     if id_customer:
         query["_id"] = ObjectId(id_customer)

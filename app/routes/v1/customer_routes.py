@@ -19,7 +19,7 @@ from app.modules.crud_operations import (
 )
 from app.modules.mikrotik import ActivateMikrotikPPPSecret, DeleteMikrotikPPPSecret
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GetCurrentDateTime
+from app.modules.generals import GenerateReferralCode, GetCurrentDateTime
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
@@ -294,6 +294,7 @@ async def register_customer(
             "status": CustomerStatusData.nonactive.value,
             "gender": payload["gender"],
             "saldo": 0,
+            "referral": GenerateReferralCode(payload["email"]),
             "role": 99,
             "address": payload["location"]["address"],
         }
@@ -398,6 +399,7 @@ async def create_customer(
             "phone_number": payload["phone_number"],
             "status": 1,
             "gender": payload["gender"],
+            "referral": GenerateReferralCode(payload["email"]),
             "saldo": 0,
             "role": 99,
             "address": payload["location"]["address"],

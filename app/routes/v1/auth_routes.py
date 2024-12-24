@@ -28,7 +28,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 async def VerifyPassword(plain_password, hashed_password):
     try:
-        # password = await RSADecryption(plain_password)
         return pwd_context.verify(plain_password, hashed_password)
     except Exception as e:
         print(e)

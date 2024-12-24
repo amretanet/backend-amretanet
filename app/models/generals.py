@@ -23,8 +23,9 @@ class Location(BaseModel):
 
 
 class UploadImageType(str, Enum):
-    payment = "payment"
-    odc = "odc"
-    odp = "odp"
-    id_card = "id_card"
-    house = "house"
+    payment_evidence = "payment_evidence"
+    odc_attachment = "odc_attachment"
+    odp_attachment = "odp_attachment"
+    id_card_attachment = "id_card_attachment"
+    house_attachment = "house_attachment"
+    ticket_attachment = "ticket_attachment"

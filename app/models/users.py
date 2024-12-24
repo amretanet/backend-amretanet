@@ -12,6 +12,7 @@ UserProjections = {
     "status": 1,
     "gender": 1,
     "saldo": 1,
+    "referral": 1,
     "role": 1,
     "address": 1,
 }
@@ -41,6 +42,7 @@ class UserData(BaseModel):
     gender: Optional[str] = None
     saldo: Optional[int] = 0
     role: Optional[int] = None
+    referral: Optional[str] = None
     address: Optional[str] = None
 
     class Config:

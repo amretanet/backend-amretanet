@@ -1,10 +1,16 @@
 from datetime import datetime, timedelta
+import hashlib
 from bson import ObjectId
 import pytz
 from typing import Any
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def GenerateReferralCode(unique_data):
+    referral_code = hashlib.md5(unique_data.encode())
+    return referral_code.hexdigest()[:10].upper()
 
 
 def GetDueDateRange(gap: int):
