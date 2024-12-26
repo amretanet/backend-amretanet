@@ -11,7 +11,7 @@ load_dotenv()
 PROJECT_PATH = os.getenv("PROJECT_PATH")
 
 
-def InvoiceStatusFormatter(status: str):
+def paymentStatusFormatter(status: str):
     if status == "PAID":
         return "SUDAH DIBAYAR"
     elif status == "PENDING":
@@ -88,7 +88,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        InvoiceStatusFormatter(data.get("status", "PAID")),
+        paymentStatusFormatter(data.get("status", "PAID")),
         border=False,
         ln=True,
         align="R",
@@ -309,7 +309,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        f'Status Tagihan      : {InvoiceStatusFormatter(data.get("status","PAID"))}',
+        f'Status Tagihan      : {paymentStatusFormatter(data.get("status","PAID"))}',
         ln=True,
         align="L",
     )
