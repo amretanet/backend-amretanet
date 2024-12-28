@@ -165,3 +165,27 @@ async def DeleteMikrotikPPPSecretByID(db, router, id_secret: str):
         is_success = False
 
     return JSONResponse(content=is_success)
+
+
+async def DeleteMikrotikPPPProfileByID(db, router, id_profile: str):
+    is_success: True
+    try:
+        # check router
+        exist_router = await GetOneData(db.router, {"name": router})
+        if not exist_router:
+            return False
+
+        # setup mikrotik credentials
+        host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
+        username = exist_router.get("username", "")
+        password = exist_router.get("password", "")
+
+        # get specified profile
+        url = urljoin(host, f"/rest/ppp/profile/{id_profile}")
+        response = requests.delete(url, auth=HTTPBasicAuth(username, password))
+        if response.status_code != 200:
+            is_success = False
+    except Exception:
+        is_success = False
+
+    return JSONResponse(content=is_success)

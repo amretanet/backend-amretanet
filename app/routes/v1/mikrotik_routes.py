@@ -11,6 +11,7 @@ from app.models.users import UserData
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import GetOneData
 from app.modules.mikrotik import (
+    DeleteMikrotikPPPProfileByID,
     DeleteMikrotikPPPSecretByID,
     UpdateMikrotikPPPSecretByID,
 )
@@ -77,6 +78,21 @@ async def get_profile_data(
         print(e)
 
     return JSONResponse(content={"profile_data": profile_data})
+
+
+@router.put("/profile/delete/{id}")
+async def delete_profile(
+    id: str,
+    data: MikrotikDeleteData = Body(..., embed=True),
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    payload = data.dict(exclude_unset=True)
+    is_success = await DeleteMikrotikPPPProfileByID(db, payload["router"], id)
+    if not is_success:
+        raise HTTPException(status_code=400, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
 
 
 @router.get("/secret")
