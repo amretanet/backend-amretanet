@@ -34,8 +34,8 @@ router = APIRouter(prefix="/salary", tags=["Salaries"])
 async def get_salaries(
     key: str = None,
     id_user: str = None,
-    period_month: str = None,
-    period_year: int = None,
+    month: str = None,
+    year: str = None,
     status: SalaryStatusData = None,
     page: int = 1,
     items: int = 1,
@@ -53,10 +53,10 @@ async def get_salaries(
         query["status"] = status
     if id_user:
         query["id_user"] = ObjectId(id_user)
-    if period_month:
-        query["periode.month"] = period_month
-    if period_year:
-        query["periode.year"] = period_year
+    if month:
+        query["period.month"] = month
+    if year:
+        query["period.year"] = year
 
     pipeline = [
         {"$match": query},
@@ -105,6 +105,7 @@ async def create_salary(
 
     if payload["status"] == SalaryStatusData.PAID.value:
         expenditure_data = {
+            "id_salary": result.inserted_id,
             "nominal": payload["net_salary"],
             "category": "GAJI KARYAWAN",
             "method": payload["method"],
@@ -144,7 +145,7 @@ async def update_salary(
         and exist_data.get("status", None) != payload["status"]
     ):
         expenditure_data = {
-            "nominal": exist_data["net_salary"],
+            "nominal": payload["net_salary"],
             "category": "GAJI KARYAWAN",
             "method": exist_data.get("method", None),
             "date": exist_data["created_at"],
@@ -153,6 +154,12 @@ async def update_salary(
             "created_by": ObjectId(current_user.id),
         }
         await CreateOneData(db.expenditures, expenditure_data)
+    else:
+        await UpdateOneData(
+            db.expenditures,
+            {"id_salary": ObjectId(id)},
+            {"$set": {"nominal": payload["net_salary"]}},
+        )
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 
@@ -170,4 +177,5 @@ async def delete_salary(
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    await DeleteOneData(db.expenditures, {"id_salary": ObjectId(id)})
     return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
