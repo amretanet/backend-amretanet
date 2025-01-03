@@ -209,6 +209,15 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         7,
+        f'PPN: Rp{ThousandSeparator(data.get("ppn"))}',
+        border=False,
+        ln=False,
+        align="R",
+    )
+    pdf.ln(7)
+    pdf.cell(
+        0,
+        7,
         f'Kode Unik: {str(data.get("unique_code",0))}',
         border=False,
         ln=False,
@@ -234,7 +243,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         7,
-        f'*Mohon melakukan pembayaran dengan nominal tepat Rp{ThousandSeparator(data.get("amount", 0))} sesuai Total Tagihan*',
+        f'*Mohon melakukan pembayaran dengan nominal tepat Rp{ThousandSeparator(data.get("amount"))} sesuai Total Tagihan*',
         border=False,
         ln=False,
         align="L",
@@ -355,11 +364,18 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         data.get("add_on_package_amount", 0)
     )
     pdf.cell(0, 6, f"Sub Total : Rp{ThousandSeparator(subtotal)}", ln=True, align="C")
-    pdf.cell(0, 6, f'Kode Unik : {data.get("unique_code",0)}', ln=True, align="C")
+    pdf.cell(0, 6, f'PPN : Rp{ThousandSeparator(data.get("ppn"))}', ln=True, align="C")
     pdf.cell(
         0,
         6,
-        f'Total Tagihan : Rp{ThousandSeparator(data.get("amount",0))}',
+        f'Kode Unik : {ThousandSeparator(data.get("unique_code"))}',
+        ln=True,
+        align="C",
+    )
+    pdf.cell(
+        0,
+        6,
+        f'Total Tagihan : Rp{ThousandSeparator(data.get("amount"))}',
         ln=True,
         align="C",
     )

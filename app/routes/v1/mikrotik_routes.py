@@ -177,6 +177,44 @@ async def get_system_resource_data(
     return JSONResponse(content={"system_resource_data": system_resource_data})
 
 
+@router.get("/user-stats")
+async def get_user_stats_data(
+    router: str,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    ppp = []
+    secret = []
+
+    exist_router = await GetOneData(db.router, {"name": router})
+    if not exist_router:
+        return JSONResponse(content={"ppp": ppp})
+
+    host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
+    ppp_url = urljoin(host, "/rest/ppp/active")
+    secret_url = urljoin(host, "/rest/ppp/secret")
+    username = exist_router.get("username", "")
+    password = exist_router.get("password", "")
+    try:
+        ppp_response = requests.get(ppp_url, auth=HTTPBasicAuth(username, password))
+        if ppp_response.status_code == 200:
+            ppp = ppp_response.json()
+        secret_response = requests.get(
+            secret_url, auth=HTTPBasicAuth(username, password)
+        )
+        if secret_response.status_code == 200:
+            secret = secret_response.json()
+    except requests.exceptions.RequestException as e:
+        print(e)
+
+    return JSONResponse(
+        content={
+            "ppp": len(ppp),
+            "secret": len(secret),
+        }
+    )
+
+
 @router.get("/log")
 async def get_log_data(
     router: str,

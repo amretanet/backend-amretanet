@@ -33,6 +33,12 @@ from app.modules.response_message import (
     NOT_FOUND_MESSAGE,
 )
 from app.routes.v1.auth_routes import GetCurrentUser
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PPN = int(os.getenv("PPN"))
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
@@ -111,7 +117,7 @@ async def generate_invoice(
     pipeline = []
     query = {
         "status": CustomerStatusData.active.value,
-        "due_date": {"$in": GetDueDateRange(10)},
+        # "due_date": {"$in": GetDueDateRange(10)},
     }
     if id_customer:
         query["_id"] = ObjectId(id_customer)
@@ -200,6 +206,7 @@ async def generate_invoice(
                 "name": 1,
                 "service_number": 1,
                 "due_date": 1,
+                "ppn": 1,
                 "package": 1,
                 "package_amount": 1,
                 "add_on_packages": 1,
@@ -234,7 +241,11 @@ async def generate_invoice(
             unique_code = int(last_unique_code["value"])
 
         current_unique_code = unique_code + 1
-        final_amount = customer["amount"] + current_unique_code
+        ppn = 0
+        if customer.get("ppn", 0):
+            ppn = customer["amount"] * (PPN / 100)
+
+        final_amount = customer["amount"] + ppn + current_unique_code
         invoice_data = {
             "id_customer": ObjectId(customer["_id"]),
             "name": customer["name"],
@@ -250,6 +261,7 @@ async def generate_invoice(
             "status": "UNPAID",
             "package_amount": customer["package_amount"],
             "add_on_package_amount": customer["add_on_package_amount"],
+            "ppn": ppn,
             "unique_code": current_unique_code,
             "amount": final_amount,
             "created_at": GetCurrentDateTime(),
@@ -601,6 +613,7 @@ async def update_invoice(
                     "name": 1,
                     "service_number": 1,
                     "due_date": 1,
+                    "ppn": 1,
                     "package": 1,
                     "package_amount": 1,
                     "add_on_packages": 1,
@@ -612,12 +625,16 @@ async def update_invoice(
 
         customer_data, _ = await GetManyData(db.customers, pipeline)
         for customer in customer_data:
-            final_amount = customer["amount"] + invoice_data["unique_code"]
+            ppn = 0
+            if customer.get("ppn", 0):
+                ppn = customer["amount"] * (PPN / 100)
+            final_amount = customer["amount"] + ppn + invoice_data["unique_code"]
             invoice_update_data = {
                 "package": customer["package"],
                 "add_on_packages": customer["add_on_packages"],
                 "package_amount": customer["package_amount"],
                 "add_on_package_amount": customer["add_on_package_amount"],
+                "ppn": ppn,
                 "amount": final_amount,
             }
 

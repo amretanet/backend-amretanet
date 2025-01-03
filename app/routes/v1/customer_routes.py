@@ -9,7 +9,7 @@ from app.models.customers import (
 from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
 from app.models.tickets import TicketStatusData
-from app.models.users import UserData, UserStatusData
+from app.models.users import UserData
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
@@ -170,7 +170,7 @@ async def get_customers(
                 "ppn": 1,
                 "due_date": 1,
                 "billing": 1,
-                "referal": 1,
+                "referral": 1,
             }
         }
     )
@@ -195,6 +195,73 @@ async def get_customers(
             "pagination_info": pagination_info,
         }
     )
+
+
+@router.get("/stats")
+async def get_customer_stats(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$status",
+                "nonactive": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": ["$status", CustomerStatusData.nonactive]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "active": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.active]}, 1, 0]
+                    }
+                },
+                "pending": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": ["$status", CustomerStatusData.pending]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "free": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.free]}, 1, 0]
+                    }
+                },
+                "isolir": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.isolir]}, 1, 0]
+                    }
+                },
+                "paid": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.paid]}, 1, 0]
+                    }
+                },
+                "count": {"$sum": 1},
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "nonactive": 1,
+                "active": 1,
+                "free": 1,
+                "isolir": 1,
+                "paid": 1,
+                "pending": 1,
+                "count": 1,
+            }
+        },
+    ]
+    customer_stats_data, _ = await GetManyData(db.customers, pipeline)
+    return JSONResponse(content={"customer_stats_data": customer_stats_data[0]})
 
 
 @router.get("/detail/{id}")

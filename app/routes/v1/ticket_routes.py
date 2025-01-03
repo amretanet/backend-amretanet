@@ -150,13 +150,44 @@ async def get_ticket_stats(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
-    pipeline.append({"$group": {"_id": "$status", "count": {"$sum": 1}}})
+    pipeline.append(
+        {
+            "$group": {
+                "_id": None,
+                "OPEN": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": ["$status", TicketStatusData.OPEN]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "PENDING": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", TicketStatusData.PENDING]}, 1, 0]
+                    }
+                },
+                "ON_PROGRESS": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": ["$status", TicketStatusData.ON_PROGRESS]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "CLOSED": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$status", TicketStatusData.CLOSED]}, 1, 0]
+                    }
+                },
+                "count": {"$sum": 1},
+            }
+        }
+    )
     ticket_stats_data, _ = await GetManyData(db.tickets, pipeline)
-    response_stats = {}
-    for stats in ticket_stats_data:
-        response_stats.update({stats["_id"]: stats["count"]})
-
-    return JSONResponse(content={"ticket_stats_data": response_stats})
+    return JSONResponse(content={"ticket_stats_data": ticket_stats_data[0]})
 
 
 @router.post("/add")
