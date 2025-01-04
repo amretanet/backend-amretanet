@@ -60,6 +60,6 @@ class CustomerRegisterData(BaseModel):
     email: str
     phone_number: str
     location: CustomerLocationData
-    referral: Optional[int] = 0
+    referral: Optional[str] = None
     id_package: str
     instalation_date: Optional[str] = None

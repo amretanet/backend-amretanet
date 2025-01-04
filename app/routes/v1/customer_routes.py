@@ -47,6 +47,7 @@ async def get_customers(
     id_odp: str = None,
     id_router: str = None,
     status: int = None,
+    referral: str = None,
     is_maps_only: bool = False,
     page: int = 1,
     items: int = 1,
@@ -74,6 +75,8 @@ async def get_customers(
         query["id_router"] = ObjectId(id_router)
     if status is not None:
         query["status"] = status
+    if referral:
+        query["referral"] = referral
 
     # add filter query
     pipeline.append({"$match": query})
@@ -163,6 +166,7 @@ async def get_customers(
             "$project": {
                 "name": 1,
                 "service_number": 1,
+                "location": 1,
                 "created_at": 1,
                 "odp_name": 1,
                 "phone_number": 1,
@@ -205,7 +209,7 @@ async def get_customer_stats(
     pipeline = [
         {
             "$group": {
-                "_id": "$status",
+                "_id": None,
                 "nonactive": {
                     "$sum": {
                         "$cond": [
