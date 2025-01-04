@@ -21,10 +21,12 @@ from app.routes.v1 import (
     salary_routes,
     mikrotik_routes,
     notification_routes,
+    change_submission_routes,
 )
 
 router = APIRouter()
 router.include_router(auth_routes.router)
+router.include_router(change_submission_routes.router)
 router.include_router(notification_routes.router)
 router.include_router(mikrotik_routes.router)
 router.include_router(salary_routes.router)
