@@ -7,6 +7,16 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
+def DeleteMikrotikInterface(host, username, password, ppp_name):
+    active_ppp_url = urljoin(host, f"/rest/ppp/active?name={ppp_name}")
+    response = requests.get(active_ppp_url, auth=HTTPBasicAuth(username, password))
+    result = response.json()
+    if len(result) > 0:
+        ppp_id = result[0].get(".id", None)
+        delete_url = urljoin(host, f"/rest/ppp/active/{ppp_id}")
+        requests.delete(delete_url, auth=HTTPBasicAuth(username, password))
+
+
 async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
     is_success = True
     try:
@@ -66,6 +76,8 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
             if response.status_code != 200:
                 is_success = False
 
+        if disabled:
+            DeleteMikrotikInterface(host, username, password, service_number)
     except Exception as e:
         print(str(e))
         is_success = False
@@ -101,6 +113,7 @@ async def DeleteMikrotikPPPSecret(db, customer_data):
             if response.status_code != 200:
                 return False
 
+            DeleteMikrotikInterface(host, username, password, service_number)
         return True
     except Exception:
         return False
@@ -136,6 +149,9 @@ async def UpdateMikrotikPPPSecretByID(db, router, id_secret, payload):
         )
         if response.status_code != 200:
             is_success = False
+
+        if payload.get("disabled") and payload.get("name"):
+            DeleteMikrotikInterface(host, username, password, payload["name"])
     except Exception as e:
         print(str(e))
         is_success = False
@@ -143,7 +159,7 @@ async def UpdateMikrotikPPPSecretByID(db, router, id_secret, payload):
     return JSONResponse(content=is_success)
 
 
-async def DeleteMikrotikPPPSecretByID(db, router, id_secret: str):
+async def DeleteMikrotikPPPSecretByID(db, router, id_secret: str, secret_name: str):
     is_success: True
     try:
         # check router
@@ -161,6 +177,8 @@ async def DeleteMikrotikPPPSecretByID(db, router, id_secret: str):
         response = requests.delete(url, auth=HTTPBasicAuth(username, password))
         if response.status_code != 200:
             is_success = False
+
+        DeleteMikrotikInterface(host, username, password, secret_name)
     except Exception:
         is_success = False
 

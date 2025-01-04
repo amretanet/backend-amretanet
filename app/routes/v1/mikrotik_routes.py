@@ -5,7 +5,11 @@ from fastapi import (
     HTTPException,
 )
 from fastapi.responses import JSONResponse
-from app.models.mikrotik import MikrotikDeleteData, MikrotikUpdateData
+from app.models.mikrotik import (
+    MikrotikDeleteData,
+    MikrotikSecretDeleteData,
+    MikrotikUpdateData,
+)
 from app.modules.generals import AddURLHTTPProtocol
 from app.models.users import UserData
 from app.routes.v1.auth_routes import GetCurrentUser
@@ -139,12 +143,14 @@ async def update_secret(
 @router.put("/secret/delete/{id}")
 async def delete_secret(
     id: str,
-    data: MikrotikDeleteData = Body(..., embed=True),
+    data: MikrotikSecretDeleteData = Body(..., embed=True),
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
-    is_success = await DeleteMikrotikPPPSecretByID(db, payload["router"], id)
+    is_success = await DeleteMikrotikPPPSecretByID(
+        db, payload["router"], id, payload["name"]
+    )
     if not is_success:
         raise HTTPException(status_code=400, detail={"message": SYSTEM_ERROR_MESSAGE})
 

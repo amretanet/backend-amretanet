@@ -13,3 +13,7 @@ class MikrotikUpdateData(BaseModel):
 
 class MikrotikDeleteData(BaseModel):
     router: str
+
+
+class MikrotikSecretDeleteData(MikrotikDeleteData):
+    name: str
