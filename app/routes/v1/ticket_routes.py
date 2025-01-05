@@ -37,6 +37,7 @@ router = APIRouter(prefix="/ticket", tags=["Tickets"])
 async def get_tickets(
     key: str = None,
     status: TicketStatusData = None,
+    id_reporter: str = None,
     page: int = 1,
     items: int = 1,
     current_user: UserData = Depends(GetCurrentUser),
@@ -51,6 +52,9 @@ async def get_tickets(
         ]
     if status:
         query["status"] = status
+    if id_reporter:
+        query["id_reporter"] = ObjectId(id_reporter)
+
     pipeline = [
         {"$match": query},
         {"$sort": {"created_at": -1}},
@@ -199,7 +203,8 @@ async def create_ticket(
     payload = data.dict(exclude_unset=True)
     payload["name"] = f'{payload["type"].value}-{int(GetCurrentDateTime().timestamp())}'
     payload["status"] = TicketStatusData.OPEN
-    payload["id_assignee"] = ObjectId(payload["id_assignee"])
+    if "id_assignee" in payload and payload["id_assignee"]:
+        payload["id_assignee"] = ObjectId(payload["id_assignee"])
     if "id_reporter" in payload and payload["id_reporter"]:
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
     if "id_odc" in payload and payload["id_odc"] is not None:

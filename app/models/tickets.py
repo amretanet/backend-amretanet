@@ -19,7 +19,7 @@ class TicketTypeData(str, Enum):
 
 class TicketInsertData(BaseModel):
     id_reporter: Optional[str] = None
-    id_assignee: str
+    id_assignee: Optional[str] = None
     id_odc: Optional[str] = None
     id_odp: Optional[str] = None
     title: str

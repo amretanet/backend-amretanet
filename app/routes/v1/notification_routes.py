@@ -41,7 +41,9 @@ async def get_notifications(
     pipeline.append({"$sort": {"created_at": -1}})
 
     notification_data, _ = await GetManyData(db.notifications, pipeline)
-    notification_count = await GetDataCount(db.notifications, {"is_read": 0})
+    notification_count = await GetDataCount(
+        db.notifications, {"is_read": 0, "type": type.value}
+    )
     return JSONResponse(
         content={
             "notification_data": notification_data,
