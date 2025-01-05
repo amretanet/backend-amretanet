@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
+DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -268,6 +268,40 @@ async def get_customer_stats(
     return JSONResponse(content={"customer_stats_data": customer_stats_data[0]})
 
 
+@router.get("/dashboard-info/{id}")
+async def get_customer_dashboard_info(
+    id: str,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    customer_invoice = {"amount": 0, "status": None}
+    customer_package = {"name": None, "bandwidth": 0}
+    month = str(GetCurrentDateTime().month).zfill(2)
+    year = str(GetCurrentDateTime().year)
+    exist_invoice = await GetOneData(
+        db.invoices, {"id_customer": ObjectId(id), "month": month, "year": year}
+    )
+    if exist_invoice:
+        customer_invoice["amount"] = exist_invoice.get("amount", 0)
+        customer_invoice["status"] = exist_invoice.get("status", 0)
+
+    exist_customer = await GetOneData(db.customers, {"_id": ObjectId(id)})
+    if exist_customer:
+        exist_package = await GetOneData(
+            db.packages, {"_id": ObjectId(exist_customer.get("id_package"))}
+        )
+        if exist_package:
+            customer_package["name"] = exist_package.get("name", None)
+            customer_package["bandwidth"] = exist_package.get("bandwidth", 0)
+
+    return JSONResponse(
+        content={
+            "customer_invoice": customer_invoice,
+            "customer_package": customer_package,
+        }
+    )
+
+
 @router.get("/detail/{id}")
 async def get_customer_detail(
     id: str,
@@ -360,7 +394,7 @@ async def register_customer(
         user_data = {
             "name": payload["name"],
             "email": payload["email"],
-            "password": pwd_context.hash(DEFAULT_PASSWORD),
+            "password": pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD),
             "phone_number": payload["phone_number"],
             "status": CustomerStatusData.nonactive.value,
             "gender": payload["gender"],
@@ -466,7 +500,7 @@ async def create_customer(
         user_data = {
             "name": payload["name"],
             "email": payload["email"],
-            "password": pwd_context.hash(DEFAULT_PASSWORD),
+            "password": pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD),
             "phone_number": payload["phone_number"],
             "status": 1,
             "gender": payload["gender"],

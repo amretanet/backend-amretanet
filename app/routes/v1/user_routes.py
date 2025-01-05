@@ -42,7 +42,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
+DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
+DEFAULT_MANAGEMENT_PASSWORD = os.getenv("DEFAULT_MANAGEMENT_PASSWORD")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -202,7 +203,11 @@ async def reset_password(
     if not exist_user:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
-    password = pwd_context.hash(DEFAULT_PASSWORD)
+    if exist_user["role"] == UserRole.customer.value:
+        password = pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD)
+    else:
+        password = pwd_context.hash(DEFAULT_MANAGEMENT_PASSWORD)
+
     result = await UpdateOneData(
         db.users, {"_id": ObjectId(id)}, {"$set": {"password": password}}
     )

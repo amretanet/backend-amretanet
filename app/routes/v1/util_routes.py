@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
+DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
 STATIC_DIR = Path("assets")
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
