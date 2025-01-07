@@ -16,7 +16,7 @@ class GenderData(str, Enum):
 
 
 class Location(BaseModel):
-    address: str
+    address: Optional[str] = None
     longitude: float
     latitude: float
     image_url: Optional[str] = None

@@ -16,7 +16,12 @@ from fastapi.responses import JSONResponse
 from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
 from app.modules.telegram_message import SendTelegramTicketOpenMessage
 from app.models.notifications import NotificationTypeData
-from app.models.tickets import TicketInsertData, TicketStatusData, TicketUpdateData
+from app.models.tickets import (
+    TicketCloseData,
+    TicketInsertData,
+    TicketStatusData,
+    TicketUpdateData,
+)
 from app.models.users import UserData
 from app.models.generals import Pagination
 from app.modules.generals import GetCurrentDateTime
@@ -38,6 +43,7 @@ async def get_tickets(
     key: str = None,
     status: TicketStatusData = None,
     id_reporter: str = None,
+    id_assignee: str = None,
     page: int = 1,
     items: int = 1,
     current_user: UserData = Depends(GetCurrentUser),
@@ -54,6 +60,8 @@ async def get_tickets(
         query["status"] = status
     if id_reporter:
         query["id_reporter"] = ObjectId(id_reporter)
+    if id_assignee:
+        query["id_assignee"] = ObjectId(id_assignee)
 
     pipeline = [
         {"$match": query},
@@ -273,15 +281,25 @@ async def update_ticket(
 @router.put("/close/{id}")
 async def close_ticket(
     id: str,
-    data: None,
+    data: TicketCloseData = Body(..., embed=True),
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    payload = data.dict(exclude_unset=True)
+    payload = data.dict(exclude_unset=True, exclude_none=True)
+    payload["status"] = TicketStatusData.CLOSED.value
+    payload["closed_at"] = GetCurrentDateTime()
     exist_data = await GetOneData(db.tickets, {"_id": ObjectId(id)})
     if not exist_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
-    return "masuk"
+
+    result = await UpdateOneData(db.tickets, {"_id": ObjectId(id)}, {"$set": payload})
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    # await SendWhatsappTicketOpenMessage(db, id)
+    # await SendTelegramTicketOpenMessage(db, id)
+
+    return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 
 @router.delete("/delete/{id}")

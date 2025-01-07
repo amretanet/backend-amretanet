@@ -114,6 +114,10 @@ async def create_user(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     exist_user_data = await GetOneData(db.users, {"email": payload["email"]})
     if exist_user_data:
@@ -178,6 +182,10 @@ async def delete_user(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     exist_user = await GetOneData(db.users, {"_id": ObjectId(id)})
     if not exist_user:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})

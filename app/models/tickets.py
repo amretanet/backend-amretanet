@@ -1,9 +1,20 @@
 from typing import Optional
 from pydantic import BaseModel
 from enum import Enum
+from app.models.generals import Location
 
 
 # schema
+class TicketEpidenceData(BaseModel):
+    odp_image_url: Optional[str] = None
+    ont_image_url: Optional[str] = None
+    ont_position_image_url: Optional[str] = None
+    seriel_number_image_url: Optional[str] = None
+    house_image_url: Optional[str] = None
+    customer_image_url: Optional[str] = None
+    other_image_url: Optional[str] = None
+
+
 class TicketStatusData(str, Enum):
     OPEN = "OPEN"
     PENDING = "PENDING"
@@ -36,3 +47,17 @@ class TicketUpdateData(BaseModel):
     type: Optional[TicketTypeData] = None
     description: Optional[str] = None
     status: Optional[TicketStatusData] = None
+
+
+class TicketCloseData(BaseModel):
+    id_odc: Optional[str] = None
+    id_odp: Optional[str] = None
+    tube: Optional[str] = None
+    cable: Optional[int] = None
+    hardware: Optional[str] = None
+    serial_number: Optional[str] = None
+    re_odp: Optional[int] = None
+    re_ont: Optional[int] = None
+    evidence: TicketEpidenceData
+    location: Location
+    confirm_message: str

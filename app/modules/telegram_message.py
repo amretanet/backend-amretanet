@@ -16,6 +16,28 @@ TELEGRAM_MAINTENANCE_THREAD_ID = os.getenv("TELEGRAM_MAINTENANCE_THREAD_ID")
 TELEGRAM_PAYMENT_THREAD_ID = os.getenv("TELEGRAM_PAYMENT_THREAD_ID")
 
 
+async def SendTelegramImage(image_url: list):
+    media_list = []
+    for url in image_url:
+        media_list.append(
+            {
+                "type": "photo",
+                "media": url,
+            }
+        )
+    data = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "message_thread_id": TELEGRAM_MAINTENANCE_THREAD_ID,
+        "media": media_list,
+        "caption": "Bukti Pengerjaan",
+    }
+    telegram_api_url = (
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMediaGroup"
+    )
+    response = requests.post(telegram_api_url, json=data)
+    print(response.json())
+
+
 async def SendTelegramTicketOpenMessage(db, id_ticket: str):
     SHORTCUT_BUTTON = []
     ticket_data = await GetOneData(db.tickets, {"_id": ObjectId(id_ticket)})
