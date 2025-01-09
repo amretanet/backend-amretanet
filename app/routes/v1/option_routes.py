@@ -21,6 +21,16 @@ from requests.auth import HTTPBasicAuth
 router = APIRouter(prefix="/options", tags=["Options"])
 
 
+@router.get("/hardware")
+async def get_hardware_options(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    hardware_options, _ = await GetManyData(db.hardwares, [])
+    hardware_options = [item["name"] for item in hardware_options]
+    return JSONResponse(content={"hardware_options": hardware_options})
+
+
 @router.get("/income-category")
 async def get_income_category_options(
     current_user: UserData = Depends(GetCurrentUser),

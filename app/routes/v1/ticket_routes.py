@@ -13,13 +13,20 @@ from app.modules.response_message import (
     SYSTEM_ERROR_MESSAGE,
 )
 from fastapi.responses import JSONResponse
-from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
-from app.modules.telegram_message import SendTelegramTicketOpenMessage
+from app.modules.whatsapp_message import (
+    SendWhatsappTicketClosedMessage,
+    SendWhatsappTicketOpenMessage,
+)
+from app.modules.telegram_message import (
+    SendTelegramTicketClosedMessage,
+    SendTelegramTicketOpenMessage,
+)
 from app.models.notifications import NotificationTypeData
 from app.models.tickets import (
     TicketCloseData,
     TicketInsertData,
     TicketStatusData,
+    TicketTypeData,
     TicketUpdateData,
 )
 from app.models.users import UserData
@@ -292,12 +299,28 @@ async def close_ticket(
     if not exist_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
+    customer_update_data = {}
+    if payload.get("id_odc"):
+        payload["id_odc"] = ObjectId(payload["id_odc"])
+    if payload.get("id_odp"):
+        payload["id_odp"] = ObjectId(payload["id_odp"])
+        customer_update_data["id_odp"] = payload["id_odp"]
     result = await UpdateOneData(db.tickets, {"_id": ObjectId(id)}, {"$set": payload})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
-    # await SendWhatsappTicketOpenMessage(db, id)
-    # await SendTelegramTicketOpenMessage(db, id)
+    if (
+        exist_data.get("type") == TicketTypeData.PSB.value
+        or payload.get("type") == TicketTypeData.PSB.value
+    ):
+        await UpdateOneData(
+            db.customers,
+            {"id_user": ObjectId(exist_data.get("id_reporter"))},
+            {"$set": customer_update_data},
+        )
+
+    await SendWhatsappTicketClosedMessage(db, id)
+    await SendTelegramTicketClosedMessage(db, id)
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
