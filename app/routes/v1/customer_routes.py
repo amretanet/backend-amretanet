@@ -5,6 +5,7 @@ from app.models.customers import (
     CustomerInsertData,
     CustomerRegisterData,
     CustomerStatusData,
+    CustomerUpdateData,
 )
 from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
@@ -19,7 +20,11 @@ from app.modules.crud_operations import (
 )
 from app.modules.mikrotik import ActivateMikrotikPPPSecret, DeleteMikrotikPPPSecret
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GenerateReferralCode, GetCurrentDateTime
+from app.modules.generals import (
+    GenerateRandomString,
+    GenerateReferralCode,
+    GetCurrentDateTime,
+)
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
@@ -308,11 +313,136 @@ async def get_customer_detail(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    customer_data = await GetOneData(db.customers, {"_id": ObjectId(id)})
-    if not customer_data:
-        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+    pipeline = []
+    query = {"_id": ObjectId(id)}
+    # add filter query
+    pipeline.append({"$match": query})
 
-    return JSONResponse(content={"customer_data": customer_data})
+    # add join id odp query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "odp",
+                "localField": "id_odp",
+                "foreignField": "_id",
+                "pipeline": [{"$limit": 1}],
+                "as": "odp",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "odp_name": {"$ifNull": [{"$arrayElemAt": ["$odp.name", 0]}, None]}
+            }
+        },
+    )
+    # add join id router query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "router",
+                "localField": "id_router",
+                "foreignField": "_id",
+                "pipeline": [{"$limit": 1}],
+                "as": "router",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "router_name": {
+                    "$ifNull": [{"$arrayElemAt": ["$router.name", 0]}, None]
+                }
+            }
+        },
+    )
+    # add join id coverage area query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "coverage_areas",
+                "localField": "id_coverage_area",
+                "foreignField": "_id",
+                "pipeline": [{"$limit": 1}],
+                "as": "coverage_area",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "coverage_area_name": {
+                    "$ifNull": [{"$arrayElemAt": ["$coverage_area.name", 0]}, None]
+                }
+            }
+        },
+    )
+
+    # add join id package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "localField": "id_package",
+                "foreignField": "_id",
+                "pipeline": [{"$limit": 1}],
+                "as": "package",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "package_billing": {
+                    "$ifNull": [{"$arrayElemAt": ["$package.price.regular", 0]}, 0]
+                }
+            }
+        }
+    )
+
+    # add join id add-on package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "localField": "id_add_on_package",
+                "foreignField": "_id",
+                "pipeline": [],
+                "as": "add_on_packages",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "add_on_billing": {
+                    "$sum": {
+                        "$map": {
+                            "input": "$add_on_packages",
+                            "as": "add_on",
+                            "in": {"$ifNull": ["$$add_on.price.regular", 0]},
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    # counting package & add-on package price query
+    pipeline.append(
+        {
+            "$addFields": {
+                "billing": {"$add": ["$package_billing", "$add_on_billing"]}
+            },
+        }
+    )
+    customer_data, _ = await GetManyData(db.customers, pipeline)
+
+    return JSONResponse(
+        content={"customer_data": customer_data[0] if len(customer_data) > 0 else {}}
+    )
 
 
 @router.get("/check-data/{key}")
@@ -422,8 +552,10 @@ async def register_customer(
         # formatting payload
         payload["id_user"] = insert_user_result.inserted_id
         payload["id_package"] = ObjectId(payload["id_package"])
+        payload["pppoe_username"] = payload["service_number"]
+        payload["pppoe_password"] = GenerateRandomString(payload["service_number"])
         payload["status"] = CustomerStatusData.pending.value
-        payload["created_at"] = GetCurrentDateTime()
+        payload["registered_at"] = GetCurrentDateTime()
         insert_customer_result = await CreateOneData(db.customers, payload)
         if not insert_customer_result.inserted_id:
             await DeleteOneData(db.users, {"email": user_data["email"]})
@@ -477,6 +609,9 @@ async def create_customer(
         )
         if lates_service_number:
             payload["service_number"] = int(lates_service_number["service_number"]) + 1
+
+        payload["pppoe_username"] = payload["service_number"]
+        payload["pppoe_password"] = GenerateRandomString(payload["service_number"])
 
         # check exist id card number
         exist_id_card_number = await GetOneData(
@@ -546,8 +681,8 @@ async def create_customer(
         payload["id_coverage_area"] = ObjectId(payload["id_coverage_area"])
         payload["id_odp"] = ObjectId(payload["id_odp"])
         payload["status"] = 1
-        payload["created_by"] = current_user.name
-        payload["created_at"] = GetCurrentDateTime()
+        payload["registered_by"] = current_user.name
+        payload["registered_at"] = GetCurrentDateTime()
         insert_customer_result = await CreateOneData(db.customers, payload)
         if not insert_customer_result:
             await DeleteOneData(db.users, {"email": user_data["email"]})
@@ -567,7 +702,7 @@ async def create_customer(
 @router.put("/update/{id}")
 async def update_customer(
     id: str,
-    data: CustomerInsertData = Body(..., embed=True),
+    data: CustomerUpdateData = Body(..., embed=True),
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):

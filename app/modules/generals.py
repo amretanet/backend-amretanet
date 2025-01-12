@@ -26,6 +26,11 @@ def GenerateReferralCode(unique_data):
     return referral_code.hexdigest()[:10].upper()
 
 
+def GenerateRandomString(unique_data, length: int = 10):
+    random_string = hashlib.md5(unique_data.encode())
+    return random_string.hexdigest()[:length]
+
+
 def GetDueDateRange(gap: int):
     current_date = GetCurrentDateTime()
     target_date = current_date + timedelta(days=gap)

@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Optional
 from enum import Enum
 from pydantic import BaseModel
@@ -28,10 +27,16 @@ class SalaryPeriodeData(BaseModel):
 class SalaryInsertData(BaseModel):
     id_user: str
     period: SalaryPeriodeData
-    gross_salary: int
-    deductions: int
-    bonuses: int
-    net_salary: int
+    basic_salary: int
+    overtime_allowance: int
+    transport_allowance: int
+    bpjs_allowance: int
+    other_allowance: int
+    cash_deduction: int
+    bpjs_deduction: int
+    absent_deduction: int
+    other_deduction: int
+    salary: int
     status: SalaryStatusData
     method: Optional[PaymentMethodData]
     absence_summary: SalaryAbsenceData
@@ -41,10 +46,16 @@ class SalaryInsertData(BaseModel):
 class SalaryUpdateData(BaseModel):
     id_user: Optional[str]
     period: Optional[SalaryPeriodeData]
-    gross_salary: Optional[int]
-    deductions: Optional[int]
-    bonuses: Optional[int]
-    net_salary: Optional[int]
+    basic_salary: Optional[int]
+    overtime_allowance: Optional[int]
+    transport_allowance: Optional[int]
+    bpjs_allowance: Optional[int]
+    other_allowance: Optional[int]
+    cash_deduction: Optional[int]
+    bpjs_deduction: Optional[int]
+    absent_deduction: Optional[int]
+    other_deduction: Optional[int]
+    salary: Optional[int]
     status: Optional[SalaryStatusData]
     method: Optional[PaymentMethodData]
     absence_summary: Optional[SalaryAbsenceData]

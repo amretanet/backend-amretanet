@@ -53,6 +53,28 @@ class CustomerInsertData(BaseModel):
     port_odp: int
 
 
+class CustomerUpdateData(BaseModel):
+    name: str
+    id_card: CustomerIDCardData
+    gender: GenderData
+    email: str
+    phone_number: str
+    location: CustomerLocationData
+    description: str
+    billing_type: CustomerBillingTypeData
+    ppn: int
+    due_date: str
+    referral: Optional[int] = 0
+    pppoe_username: str
+    pppoe_password: str
+    id_router: str
+    id_package: str
+    id_add_on_package: Optional[list[str]] = []
+    id_coverage_area: str
+    id_odp: str
+    port_odp: int
+
+
 class CustomerRegisterData(BaseModel):
     name: str
     id_card: CustomerIDCardData

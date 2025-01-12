@@ -106,7 +106,7 @@ async def create_salary(
     if payload["status"] == SalaryStatusData.PAID.value:
         expenditure_data = {
             "id_salary": result.inserted_id,
-            "nominal": payload["net_salary"],
+            "nominal": payload["salary"],
             "category": "GAJI KARYAWAN",
             "method": payload["method"],
             "date": payload["created_at"],
@@ -145,7 +145,7 @@ async def update_salary(
         and exist_data.get("status", None) != payload["status"]
     ):
         expenditure_data = {
-            "nominal": payload["net_salary"],
+            "nominal": payload["salary"],
             "category": "GAJI KARYAWAN",
             "method": exist_data.get("method", None),
             "date": exist_data["created_at"],
@@ -158,7 +158,7 @@ async def update_salary(
         await UpdateOneData(
             db.expenditures,
             {"id_salary": ObjectId(id)},
-            {"$set": {"nominal": payload["net_salary"]}},
+            {"$set": {"nominal": payload["salary"]}},
         )
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 

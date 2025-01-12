@@ -7,8 +7,8 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
-def DeleteMikrotikInterface(host, username, password, ppp_name):
-    active_ppp_url = urljoin(host, f"/rest/ppp/active?name={ppp_name}")
+def DeleteMikrotikInterface(host, username, password, pppoe_name):
+    active_ppp_url = urljoin(host, f"/rest/ppp/active?name={pppoe_name}")
     response = requests.get(active_ppp_url, auth=HTTPBasicAuth(username, password))
     result = response.json()
     if len(result) > 0:
@@ -20,7 +20,8 @@ def DeleteMikrotikInterface(host, username, password, ppp_name):
 async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
     is_success = True
     try:
-        service_number = customer_data.get("service_number", None)
+        pppoe_name = customer_data.get("pppoe_name", None)
+        pppoe_password = customer_data.get("pppoe_password", None)
         id_router = customer_data.get("id_router", None)
 
         # check router
@@ -30,7 +31,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
 
         # setup mikrotik credentials
         host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
-        url = urljoin(host, f"/rest/ppp/secret?name={service_number}")
+        url = urljoin(host, f"/rest/ppp/secret?name={pppoe_name}")
         username = exist_router.get("username", "")
         password = exist_router.get("password", "")
 
@@ -61,8 +62,8 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
                 is_success = False
 
             secret_data = {
-                "name": service_number,
-                "password": service_number,
+                "name": pppoe_name,
+                "password": pppoe_password,
                 "service": "ppp",
                 "profile": package_data.get("router_profile", "default"),
                 "disabled": disabled,
@@ -77,7 +78,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
                 is_success = False
 
         if disabled:
-            DeleteMikrotikInterface(host, username, password, service_number)
+            DeleteMikrotikInterface(host, username, password, pppoe_name)
     except Exception as e:
         print(str(e))
         is_success = False
@@ -88,7 +89,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
 async def DeleteMikrotikPPPSecret(db, customer_data):
     try:
         id_router = customer_data.get("id_router", None)
-        service_number = customer_data.get("service_number", None)
+        pppoe_name = customer_data.get("pppoe_name", None)
 
         # check router
         exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
@@ -97,7 +98,7 @@ async def DeleteMikrotikPPPSecret(db, customer_data):
 
         # setup mikrotik credentials
         host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
-        url = urljoin(host, f"/rest/ppp/secret?name={service_number}")
+        url = urljoin(host, f"/rest/ppp/secret?name={pppoe_name}")
         username = exist_router.get("username", "")
         password = exist_router.get("password", "")
 
@@ -113,7 +114,7 @@ async def DeleteMikrotikPPPSecret(db, customer_data):
             if response.status_code != 200:
                 return False
 
-            DeleteMikrotikInterface(host, username, password, service_number)
+            DeleteMikrotikInterface(host, username, password, pppoe_name)
         return True
     except Exception:
         return False
