@@ -44,7 +44,6 @@ load_dotenv()
 
 DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
 DEFAULT_MANAGEMENT_PASSWORD = os.getenv("DEFAULT_MANAGEMENT_PASSWORD")
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/user", tags=["Users"])
@@ -59,6 +58,11 @@ async def get_users(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.customer:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
+
     query = {}
     if key:
         query = {
@@ -114,10 +118,11 @@ async def create_user(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role != UserRole.admin:
+    if current_user.role == UserRole.customer:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
+
     payload = data.dict(exclude_unset=True)
     exist_user_data = await GetOneData(db.users, {"email": payload["email"]})
     if exist_user_data:
@@ -182,7 +187,7 @@ async def delete_user(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role != UserRole.admin:
+    if current_user.role == UserRole.customer:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
@@ -203,7 +208,7 @@ async def reset_password(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role != UserRole.admin:
+    if current_user.role == UserRole.customer:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )

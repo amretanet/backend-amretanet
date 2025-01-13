@@ -25,7 +25,7 @@ from app.modules.whatsapp_message import (
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GetCurrentDateTime, GetDueDateRange, RemoveFilePath
+from app.modules.generals import GetCurrentDateTime, RemoveFilePath
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
@@ -325,7 +325,7 @@ async def print_invoice_pdf(
 
     pdf_bytes = CreateInvoicePDF(invoice_data)
     if count == 1:
-        file_name = f'INVOICE-{invoice_data[0].get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
+        file_name = f"INVOICE-{invoice_data[0].get('name', '')}-{GetCurrentDateTime().timestamp()}.pdf"
     else:
         file_name = f"INVOICE-PELANGGAN-{GetCurrentDateTime().timestamp()}.pdf"
     return StreamingResponse(
@@ -370,7 +370,7 @@ async def print_invoice_thermal(
 
     pdf_bytes = CreateInvoiceThermal(invoice_data)
     if count == 1:
-        file_name = f'INVOICE-{invoice_data[0].get("name","")}-{GetCurrentDateTime().timestamp()}.pdf'
+        file_name = f"INVOICE-{invoice_data[0].get('name', '')}-{GetCurrentDateTime().timestamp()}.pdf"
     else:
         file_name = f"INVOICE-PELANGGAN-{GetCurrentDateTime().timestamp()}.pdf"
     return StreamingResponse(

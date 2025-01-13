@@ -220,7 +220,7 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
 
     message = whatsapp_message.get("overdue", "")
     fields_to_replace = {
-        "[judul]": f'*{whatsapp_message.get("advance", "").get("header", "")}*',
+        "[judul]": f"*{whatsapp_message.get('advance', '').get('header', '')}*",
         "[nama_pelanggan]": customer_data.get("name", "-"),
         "[no_servis]": customer_data.get("service_number", "-"),
         "[link]": f"{FRONTEND_DOMAIN}/service/payment",
@@ -362,26 +362,26 @@ async def SendWhatsappTicketOpenMessage(db, id_ticket: str):
         if odp:
             ticket_data["odp"] = odp
 
-    v_message = f'*Tiket CLOSED - {ticket_data.get("title","")}*\n\n'
+    v_message = f"*Tiket OPEN - {ticket_data.get('title', '')}*\n\n"
     v_message += (
-        f'🗓️ *{DateIDFormatter(ticket_data.get("created_at"),is_show_time=True)}*\n'
+        f"🗓️ *{DateIDFormatter(ticket_data.get('created_at'), is_show_time=True)}*\n"
     )
-    v_message += f'*Kode Tiket*: #{ticket_data.get("name","-")}\n'
+    v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
     if "assignee" in ticket_data:
-        v_message += f'*Teknisi*: {ticket_data.get("assignee","").get("name")}\n\n'
+        v_message += f"*Teknisi*: {ticket_data.get('assignee', '').get('name')}\n\n"
     if "customer" in ticket_data:
-        v_message += f'*Nama Pelanggan*: {ticket_data.get("customer","").get("name")}\n'
         v_message += (
-            f'*Nomor Layanan*: {ticket_data.get("customer","").get("service_number")}\n'
+            f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
         )
-        v_message += f'*Alamat*: {ticket_data.get("customer","").get("location","").get("address","-")}\n'
-    v_message += f'*Deskripsi*: {ticket_data.get("description","")}\n'
+        v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
+        v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
+    v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
     if ticket_data.get("odc"):
-        v_message += f'*ODC*: {ticket_data.get("odc","").get("name")}\n'
+        v_message += f"*ODC*: {ticket_data.get('odc', '').get('name')}\n"
     if ticket_data.get("odp"):
-        v_message += f'*ODP*: {ticket_data.get("odp","").get("name")}\n'
+        v_message += f"*ODP*: {ticket_data.get('odp', '').get('name')}\n"
     if ticket_data.get("confirm_message"):
-        v_message += f'*Pesan Konfirmasi*: {ticket_data.get("confirm_message","")}'
+        v_message += f"*Pesan Konfirmasi*: {ticket_data.get('confirm_message', '')}"
 
     for number in PHONE_NUMBERS:
         params = {
@@ -428,21 +428,21 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
         if odp:
             ticket_data["odp"] = odp
 
-    v_message = f'*Tiket CLOSED - {ticket_data.get("title","")}*\n\n'
-    v_message += f'*Kode Tiket*: #{ticket_data.get("name","-")}\n'
+    v_message = f"*Tiket CLOSED - {ticket_data.get('title', '')}*\n\n"
+    v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
     if "assignee" in ticket_data:
-        v_message += f'*Teknisi*: {ticket_data.get("assignee","").get("name")}\n\n'
+        v_message += f"*Teknisi*: {ticket_data.get('assignee', '').get('name')}\n\n"
     if "customer" in ticket_data:
-        v_message += f'*Nama Pelanggan*: {ticket_data.get("customer","").get("name")}\n'
         v_message += (
-            f'*Nomor Layanan*: {ticket_data.get("customer","").get("service_number")}\n'
+            f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
         )
-        v_message += f'*Alamat*: {ticket_data.get("customer","").get("location","").get("address","-")}\n'
+        v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
+        v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
     if "odc" in ticket_data:
-        v_message += f'*ODC*: {ticket_data.get("odc","").get("name")}\n'
+        v_message += f"*ODC*: {ticket_data.get('odc', '').get('name')}\n"
     if "odp" in ticket_data:
-        v_message += f'*ODP*: {ticket_data.get("odp","").get("name")}\n'
-    v_message += f'*Deskripsi*: {ticket_data.get("description","")}\n'
+        v_message += f"*ODP*: {ticket_data.get('odp', '').get('name')}\n"
+    v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
 
     for number in PHONE_NUMBERS:
         params = {
