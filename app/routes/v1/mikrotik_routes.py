@@ -11,7 +11,7 @@ from app.models.mikrotik import (
     MikrotikUpdateData,
 )
 from app.modules.generals import AddURLHTTPProtocol
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import GetOneData
 from app.modules.mikrotik import (
@@ -26,6 +26,7 @@ from requests.auth import HTTPBasicAuth
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
 )
 
@@ -38,6 +39,10 @@ async def get_interface_data(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     interface_data = []
 
     exist_router = await GetOneData(db.router, {"name": router})
@@ -64,6 +69,10 @@ async def get_profile_data(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     profile_data = []
 
     exist_router = await GetOneData(db.router, {"name": router})
@@ -91,6 +100,10 @@ async def delete_profile(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     is_success = await DeleteMikrotikPPPProfileByID(db, payload["router"], id)
     if not is_success:
@@ -105,6 +118,10 @@ async def get_secret_data(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     secret_data = []
 
     exist_router = await GetOneData(db.router, {"name": router})
@@ -132,6 +149,10 @@ async def update_secret(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     is_success = await UpdateMikrotikPPPSecretByID(db, payload["router"], id, payload)
     if not is_success:
@@ -147,6 +168,10 @@ async def delete_secret(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     is_success = await DeleteMikrotikPPPSecretByID(
         db, payload["router"], id, payload["name"]
@@ -163,6 +188,10 @@ async def get_system_resource_data(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     system_resource_data = []
 
     exist_router = await GetOneData(db.router, {"name": router})
@@ -189,6 +218,10 @@ async def get_user_stats_data(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     ppp = []
     secret = []
 
@@ -227,6 +260,10 @@ async def get_log_data(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     log_data = []
 
     exist_router = await GetOneData(db.router, {"name": router})

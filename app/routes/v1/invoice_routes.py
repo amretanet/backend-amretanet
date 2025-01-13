@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.invoices import InvoiceStatusData, InvoiceUpdateData
 from app.models.payments import PaymentMethodData
 from app.models.generals import Pagination
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteManyData,
@@ -29,6 +29,7 @@ from app.modules.generals import GetCurrentDateTime, RemoveFilePath
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
@@ -116,7 +117,7 @@ async def generate_invoice(
 ):
     pipeline = []
     query = {
-        "status": CustomerStatusData.active.value,
+        "status": CustomerStatusData.ACTIVE.value,
         # "due_date": {"$in": GetDueDateRange(10)},
     }
     if id_customer:
@@ -436,7 +437,7 @@ async def isolir_customer(
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice_data["id_customer"])},
-                {"$set": {"status": CustomerStatusData.isolir.value}},
+                {"$set": {"status": CustomerStatusData.ISOLIR.value}},
             )
             await ActivateMikrotikPPPSecret(db, customer_data, True)
             await SendWhatsappIsolirMessage(db, id)
@@ -460,7 +461,7 @@ async def isolir_customer(
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice["id_customer"])},
-                {"$set": {"status": CustomerStatusData.isolir.value}},
+                {"$set": {"status": CustomerStatusData.ISOLIR.value}},
             )
             await ActivateMikrotikPPPSecret(db, customer_data, True)
             await SendWhatsappIsolirMessage(db, invoice["_id"])
@@ -491,7 +492,7 @@ async def activate_customer(
         await UpdateOneData(
             db.customers,
             {"_id": ObjectId(invoice_data["id_customer"])},
-            {"$set": {"status": CustomerStatusData.active.value}},
+            {"$set": {"status": CustomerStatusData.ACTIVE.value}},
         )
         await ActivateMikrotikPPPSecret(db, customer_data, False)
         await SendWhatsappCustomerActivatedMessage(db, invoice_data["id_customer"])
@@ -710,6 +711,10 @@ async def delete_invoice(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     decoded_id = base64.b64decode(id).decode("utf-8")
     id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
     for id in id_list:

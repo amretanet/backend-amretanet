@@ -135,11 +135,11 @@ async def pay_off_payment(
     )
     if customer_data:
         status = customer_data.get("status", None)
-        if status != CustomerStatusData.active and CustomerStatusData.free:
+        if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice_data["id_customer"])},
-                {"$set": {"status": CustomerStatusData.active.value}},
+                {"$set": {"status": CustomerStatusData.ACTIVE.value}},
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
@@ -196,11 +196,11 @@ async def confirm_payment(
             continue
 
         status = customer_data.get("status", None)
-        if status != CustomerStatusData.active and CustomerStatusData.free:
+        if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice_data["id_customer"])},
-                {"$set": {"status": CustomerStatusData.active.value}},
+                {"$set": {"status": CustomerStatusData.ACTIVE.value}},
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
@@ -262,7 +262,7 @@ async def auto_confirm_moota_invoice(
                 await UpdateOneData(
                     db.customers,
                     {"_id": ObjectId(invoice["id_customer"])},
-                    {"$set": {"status": CustomerStatusData.active.value}},
+                    {"$set": {"status": CustomerStatusData.ACTIVE.value}},
                 )
                 customer_data = await GetOneData(
                     db.customers, {"_id": ObjectId(invoice["id_customer"])}

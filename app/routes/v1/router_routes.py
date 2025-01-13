@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from app.models.generals import Pagination
 from app.models.router import RouterInsertData
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteManyData,
@@ -18,6 +18,7 @@ from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
@@ -35,6 +36,10 @@ async def get_router(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     query = {}
     if key:
         query["$or"] = [
@@ -64,6 +69,10 @@ async def create_router(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     payload["name"] = payload["name"].strip()
     exist_data = await GetOneData(db.router, {"name": payload["name"]})
@@ -87,6 +96,10 @@ async def update_router(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     payload["name"] = payload["name"].strip()
     exist_data = await GetOneData(db.router, {"_id": ObjectId(id)})
@@ -115,6 +128,10 @@ async def delete_router(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     exist_data = await GetOneData(db.router, {"_id": ObjectId(id)})
     if not exist_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})

@@ -58,7 +58,7 @@ async def get_users(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.customer:
+    if current_user.role == UserRole.CUSTOMER:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
@@ -118,7 +118,7 @@ async def create_user(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.customer:
+    if current_user.role == UserRole.CUSTOMER:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
@@ -187,7 +187,7 @@ async def delete_user(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.customer:
+    if current_user.role == UserRole.CUSTOMER:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
@@ -208,7 +208,7 @@ async def reset_password(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.customer:
+    if current_user.role == UserRole.CUSTOMER:
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
@@ -216,7 +216,7 @@ async def reset_password(
     if not exist_user:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
-    if exist_user["role"] == UserRole.customer.value:
+    if exist_user["role"] == UserRole.CUSTOMER.value:
         password = pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD)
     else:
         password = pwd_context.hash(DEFAULT_MANAGEMENT_PASSWORD)

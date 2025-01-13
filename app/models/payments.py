@@ -4,8 +4,6 @@ from enum import Enum
 
 
 # schemas
-
-
 class PaymentMethodData(str, Enum):
     CASH = "CASH"
     TRANSFER = "TRANSFER"

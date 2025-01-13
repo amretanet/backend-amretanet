@@ -15,11 +15,12 @@ from app.models.customers import CustomerStatusData
 from app.modules.response_message import (
     DATA_FORMAT_NOT_VALID_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     NOT_FOUND_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
 )
 from fastapi.responses import JSONResponse
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.models.generals import Pagination
 from app.modules.generals import ReminderDateFormatter
 from app.routes.v1.auth_routes import GetCurrentUser
@@ -45,6 +46,10 @@ async def get_message_template(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     template_data = await GetOneData(
         db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
     )
@@ -61,6 +66,10 @@ async def update_message_template(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     template_data = await GetOneData(
         db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
     )
@@ -83,6 +92,10 @@ async def update_advance_message_template(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     template_data = await GetOneData(
         db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
@@ -109,8 +122,12 @@ async def get_reminder(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     query = {
-        "status": CustomerStatusData.active.value,
+        "status": CustomerStatusData.ACTIVE.value,
     }
     if key:
         query["$or"] = [
@@ -160,8 +177,11 @@ async def get_reminder(
 async def send_single_message(
     data: SendSingleMessageData = Body(..., embed=True),
     current_user: UserData = Depends(GetCurrentUser),
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     try:
         payload = data.dict(exclude_unset=True)
         response = await SendWhatsappMessage(
@@ -185,6 +205,10 @@ async def send_broadcast_message(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     try:
         payload = data.dict(exclude_unset=True)
         contact_data = []

@@ -11,8 +11,8 @@ class Pagination(BaseModel):
 
 
 class GenderData(str, Enum):
-    male = "L"
-    female = "P"
+    MALE = "L"
+    FEMALE = "P"
 
 
 class Location(BaseModel):

@@ -6,8 +6,8 @@ from enum import Enum
 
 # schemas
 class TopologyData(str, Enum):
-    star = "STAR"
-    tree = "TREE"
+    STAR = "STAR"
+    TREE = "TREE"
 
 
 class ODPInsertData(BaseModel):

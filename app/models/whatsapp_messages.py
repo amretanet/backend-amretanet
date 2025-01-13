@@ -5,8 +5,8 @@ from enum import Enum
 
 # schemas
 class SendMessageType(str, Enum):
-    broadcast = "broadcast"
-    single = "single"
+    BROADCAST = "broadcast"
+    SINGLE = "single"
 
 
 class SendSingleMessageData(BaseModel):

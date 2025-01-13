@@ -6,12 +6,12 @@ from enum import Enum
 
 # schemas
 class CustomerStatusData(int, Enum):
-    nonactive = 0
-    active = 1
-    pending = 2
-    free = 3
-    isolir = 4
-    paid = 5
+    NONACTIVE = 0
+    ACTIVE = 1
+    PENDING = 2
+    FREE = 3
+    ISOLIR = 4
+    PAID = 5
 
 
 class CustomerBillingTypeData(str, Enum):

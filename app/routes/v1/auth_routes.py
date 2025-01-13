@@ -139,7 +139,7 @@ async def login_for_access_token(
     }
     await CreateOneData(db.access_logs, access_log_payload)
     del user["password"]
-    if user["role"] == UserRole.customer:
+    if user["role"] == UserRole.CUSTOMER:
         customer_data = await GetOneData(
             db.customers,
             {"id_user": ObjectId(user["_id"])},

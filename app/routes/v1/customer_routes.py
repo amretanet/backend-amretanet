@@ -10,7 +10,7 @@ from app.models.customers import (
 from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
 from app.models.tickets import TicketStatusData
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
@@ -29,6 +29,7 @@ from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
@@ -59,6 +60,10 @@ async def get_customers(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     pipeline = []
     query = {}
     if key:
@@ -211,6 +216,10 @@ async def get_customer_stats(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     pipeline = [
         {
             "$group": {
@@ -218,7 +227,7 @@ async def get_customer_stats(
                 "nonactive": {
                     "$sum": {
                         "$cond": [
-                            {"$eq": ["$status", CustomerStatusData.nonactive]},
+                            {"$eq": ["$status", CustomerStatusData.NONACTIVE]},
                             1,
                             0,
                         ]
@@ -226,13 +235,13 @@ async def get_customer_stats(
                 },
                 "active": {
                     "$sum": {
-                        "$cond": [{"$eq": ["$status", CustomerStatusData.active]}, 1, 0]
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.ACTIVE]}, 1, 0]
                     }
                 },
                 "pending": {
                     "$sum": {
                         "$cond": [
-                            {"$eq": ["$status", CustomerStatusData.pending]},
+                            {"$eq": ["$status", CustomerStatusData.PENDING]},
                             1,
                             0,
                         ]
@@ -240,17 +249,17 @@ async def get_customer_stats(
                 },
                 "free": {
                     "$sum": {
-                        "$cond": [{"$eq": ["$status", CustomerStatusData.free]}, 1, 0]
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.FREE]}, 1, 0]
                     }
                 },
                 "isolir": {
                     "$sum": {
-                        "$cond": [{"$eq": ["$status", CustomerStatusData.isolir]}, 1, 0]
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.ISOLIR]}, 1, 0]
                     }
                 },
                 "paid": {
                     "$sum": {
-                        "$cond": [{"$eq": ["$status", CustomerStatusData.paid]}, 1, 0]
+                        "$cond": [{"$eq": ["$status", CustomerStatusData.PAID]}, 1, 0]
                     }
                 },
                 "count": {"$sum": 1},
@@ -279,6 +288,10 @@ async def get_customer_dashboard_info(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     customer_invoice = {"amount": 0, "status": None}
     customer_package = {"name": None, "bandwidth": 0}
     month = str(GetCurrentDateTime().month).zfill(2)
@@ -526,7 +539,7 @@ async def register_customer(
             "email": payload["email"],
             "password": pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD),
             "phone_number": payload["phone_number"],
-            "status": CustomerStatusData.nonactive.value,
+            "status": CustomerStatusData.NONACTIVE.value,
             "gender": payload["gender"],
             "saldo": 0,
             "referral": GenerateReferralCode(payload["email"]),
@@ -554,7 +567,7 @@ async def register_customer(
         payload["id_package"] = ObjectId(payload["id_package"])
         payload["pppoe_username"] = payload["service_number"]
         payload["pppoe_password"] = GenerateRandomString(payload["service_number"])
-        payload["status"] = CustomerStatusData.pending.value
+        payload["status"] = CustomerStatusData.PENDING.value
         payload["registered_at"] = GetCurrentDateTime()
         insert_customer_result = await CreateOneData(db.customers, payload)
         if not insert_customer_result.inserted_id:
@@ -598,6 +611,10 @@ async def create_customer(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     try:
         payload = data.dict(exclude_unset=True)
         payload["service_number"] = 2900000
@@ -706,6 +723,10 @@ async def update_customer(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     try:
         payload = data.dict(exclude_unset=True)
         # check exist data
@@ -794,18 +815,22 @@ async def update_customer_status(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     try:
         exist_data = await GetOneData(db.customers, {"_id": ObjectId(id)})
         if not exist_data:
             raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
-        if status == CustomerStatusData.nonactive:
+        if status == CustomerStatusData.NONACTIVE:
             await DeleteMikrotikPPPSecret(db, exist_data)
         else:
             disabled = (
                 False
-                if status == CustomerStatusData.active
-                or status == CustomerStatusData.free
+                if status == CustomerStatusData.ACTIVE
+                or status == CustomerStatusData.FREE
                 else True
             )
             await ActivateMikrotikPPPSecret(db, exist_data, disabled)
@@ -820,8 +845,8 @@ async def update_customer_status(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
         if (
-            status == CustomerStatusData.active
-            or status == CustomerStatusData.nonactive
+            status == CustomerStatusData.ACTIVE
+            or status == CustomerStatusData.NONACTIVE
         ):
             await UpdateOneData(
                 db.users,
@@ -843,6 +868,10 @@ async def delete_customer(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     try:
         exist_data = await GetOneData(db.customers, {"_id": ObjectId(id)})
         if not exist_data:

@@ -20,17 +20,17 @@ UserProjections = {
 
 # schemas
 class UserStatusData(int, Enum):
-    active = 1
-    nonactive = 0
+    ACTIVE = 1
+    NONACTIVE = 0
 
 
 class UserRole(int, Enum):
-    admin = 1
-    sales = 2
-    customer_service = 3
-    network_operator = 4
-    engineer = 5
-    customer = 99
+    ADMIN = 1
+    SALES = 2
+    CUSTOMER_SERVICE = 3
+    NETWORK_OPERATOR = 4
+    ENGINEER = 5
+    CUSTOMER = 99
 
 
 class UserData(BaseModel):
@@ -54,7 +54,7 @@ class UserInsertData(BaseModel):
     email: str
     password: str
     phone_number: Optional[str] = None
-    status: UserStatusData = UserStatusData.active.value
+    status: UserStatusData = UserStatusData.ACTIVE.value
     gender: GenderData
     saldo: int = 0
     role: UserRole
@@ -65,7 +65,7 @@ class UserUpdateData(BaseModel):
     name: str
     email: str
     phone_number: Optional[str] = None
-    status: UserStatusData = UserStatusData.active.value
+    status: UserStatusData = UserStatusData.ACTIVE.value
     gender: GenderData
     saldo: int = 0
     role: UserRole

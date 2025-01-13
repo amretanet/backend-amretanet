@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from app.models.generals import Pagination
 from app.models.coverage_areas import CoverageAreaInsertData
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
@@ -17,6 +17,7 @@ from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
     EXIST_DATA_MESSAGE,
@@ -33,9 +34,13 @@ async def get_coverage_areas(
     is_maps_only: bool = False,
     page: int = 1,
     items: int = 1,
-    # current_user: UserData = Depends(GetCurrentUser),
+    current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     query = {}
     if key:
         query["$or"] = [
@@ -80,6 +85,10 @@ async def create_coverage_area(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     payload["name"] = payload["name"].strip()
     exist_data = await GetOneData(db.coverage_areas, {"name": payload["name"]})
@@ -103,6 +112,10 @@ async def update_coverage_area(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     payload["name"] = payload["name"].strip()
     exist_data = await GetOneData(db.coverage_areas, {"_id": ObjectId(id)})
@@ -133,6 +146,10 @@ async def delete_coverage_area(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     exist_data = await GetOneData(db.coverage_areas, {"_id": ObjectId(id)})
     if not exist_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})

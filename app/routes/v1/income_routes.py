@@ -10,12 +10,13 @@ from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     NOT_FOUND_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
 )
 from fastapi.responses import JSONResponse
 from app.models.incomes import IncomeInsertData, IncomeUpdateData
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.models.generals import Pagination
 from app.modules.generals import GetCurrentDateTime
 from app.routes.v1.auth_routes import GetCurrentUser
@@ -81,6 +82,10 @@ async def get_incomes(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     query = {}
     if key:
         query["$or"] = [
@@ -136,6 +141,10 @@ async def get_income_count(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     query = {}
     if key:
         query["$or"] = [
@@ -168,6 +177,10 @@ async def get_income_stats(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     dates = GetIncomeStatsDatesFilter()
     pipeline = [
         {
@@ -330,6 +343,10 @@ async def get_cash_balance(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     pipeline = [
         {"$addFields": {"month": {"$month": {"$toDate": "$date"}}}},
         {"$group": {"_id": "$month", "count": {"$sum": "$nominal"}}},
@@ -383,6 +400,10 @@ async def create_income(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     if "id_invoice" in payload and payload["id_invoice"]:
         payload["id_invoice"] = ObjectId(payload["id_invoice"])
@@ -405,6 +426,10 @@ async def update_income(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     exist_data = await GetOneData(db.incomes, {"_id": ObjectId(id)})
     if not exist_data:
@@ -431,6 +456,10 @@ async def delete_income(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     exist_data = await GetOneData(db.incomes, {"_id": ObjectId(id)})
     if not exist_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})

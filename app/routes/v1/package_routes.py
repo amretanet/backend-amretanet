@@ -10,11 +10,12 @@ from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    FORBIDDEN_ACCESS_MESSAGE,
     NOT_FOUND_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
 )
 from fastapi.responses import JSONResponse
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.models.generals import Pagination
 from app.modules.generals import GetCurrentDateTime
 from app.routes.v1.auth_routes import GetCurrentUser
@@ -72,6 +73,10 @@ async def create_package(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     payload["name"] = payload["name"].strip()
     exist_data = await GetOneData(db.packages, {"name": payload["name"]})
@@ -99,6 +104,10 @@ async def update_package(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     payload = data.dict(exclude_unset=True)
     payload["name"] = payload["name"].strip()
     exist_data = await GetOneData(db.packages, {"_id": ObjectId(id)})
@@ -130,6 +139,10 @@ async def delete_package(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
     exist_data = await GetOneData(db.packages, {"_id": ObjectId(id)})
     if not exist_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
