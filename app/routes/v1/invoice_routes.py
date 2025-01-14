@@ -463,7 +463,7 @@ async def isolir_customer(
                 }
             }
         ]
-        invoice_data, _ = await GetManyData(db.invoices, pipeline)
+        invoice_data = await GetAggregateData(db.invoices, pipeline)
         for invoice in invoice_data:
             customer_data = await GetOneData(
                 db.customers, {"_id": ObjectId(invoice["id_customer"])}
@@ -471,15 +471,14 @@ async def isolir_customer(
             if not customer_data:
                 continue
 
-            await UpdateOneData(
-                db.customers,
-                {"_id": ObjectId(invoice["id_customer"])},
-                {"$set": {"status": CustomerStatusData.ISOLIR.value}},
-            )
-            await ActivateMikrotikPPPSecret(db, customer_data, True)
-            await SendWhatsappIsolirMessage(db, invoice["_id"])
-
-        return invoice_data
+            if customer_data.get("status") != CustomerStatusData.ISOLIR.value:
+                await UpdateOneData(
+                    db.customers,
+                    {"_id": ObjectId(invoice["id_customer"])},
+                    {"$set": {"status": CustomerStatusData.ISOLIR.value}},
+                )
+                await ActivateMikrotikPPPSecret(db, customer_data, True)
+                await SendWhatsappIsolirMessage(db, invoice["_id"])
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
