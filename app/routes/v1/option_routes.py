@@ -12,7 +12,12 @@ from app.models.options import (
 from app.modules.generals import AddURLHTTPProtocol
 from app.models.users import UserData
 from app.routes.v1.auth_routes import GetCurrentUser
-from app.modules.crud_operations import GetDataCount, GetManyData, GetOneData
+from app.modules.crud_operations import (
+    GetAggregateData,
+    GetDataCount,
+    GetManyData,
+    GetOneData,
+)
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import requests
 from urllib.parse import urljoin
@@ -26,7 +31,7 @@ async def get_hardware_options(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    hardware_options, _ = await GetManyData(db.hardwares, [])
+    hardware_options = await GetAggregateData(db.hardwares, [])
     hardware_options = [item["name"] for item in hardware_options]
     return JSONResponse(content={"hardware_options": hardware_options})
 
@@ -37,7 +42,7 @@ async def get_income_category_options(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = [{"$group": {"_id": "$category", "name": {"$first": "$category"}}}]
-    income_category_options, _ = await GetManyData(db.incomes, pipeline)
+    income_category_options = await GetAggregateData(db.incomes, pipeline, {"name": 1})
     income_category_options = [item["name"] for item in income_category_options]
     return JSONResponse(content={"income_category_options": income_category_options})
 
@@ -48,7 +53,9 @@ async def get_expenditure_category_options(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = [{"$group": {"_id": "$category", "name": {"$first": "$category"}}}]
-    expenditure_category_options, _ = await GetManyData(db.expenditures, pipeline)
+    expenditure_category_options = await GetAggregateData(
+        db.expenditures, pipeline, {"name": 1}
+    )
     expenditure_category_options = [
         item["name"] for item in expenditure_category_options
     ]
@@ -69,7 +76,7 @@ async def get_user_options(
 
     pipeline = [{"$match": query}, {"$sort": {"role": 1, "name": -1}}]
 
-    user_options, _ = await GetManyData(
+    user_options = await GetAggregateData(
         db.users,
         pipeline,
         {"_id": 0, "title": "$name", "value": "$_id", "role": 1, "referral": 1},
@@ -153,7 +160,7 @@ async def get_coverage_area_options(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     CoverageAreaOptionProjections = {"_id": 0, "title": "$name", "value": "$_id"}
-    coverage_area_options, _ = await GetManyData(
+    coverage_area_options = await GetAggregateData(
         db.coverage_areas, [], CoverageAreaOptionProjections
     )
     return JSONResponse(content={"coverage_area_options": coverage_area_options})
@@ -165,7 +172,7 @@ async def get_odc_options(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     ODCOptionProjections = {"_id": 0, "title": "$name", "value": "$_id"}
-    odc_options, _ = await GetManyData(db.odc, [], ODCOptionProjections)
+    odc_options = await GetAggregateData(db.odc, [], ODCOptionProjections)
     return JSONResponse(content={"odc_options": odc_options})
 
 
@@ -175,7 +182,7 @@ async def get_odp_options(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     ODPOptionProjections = {"_id": 0, "title": "$name", "value": "$_id"}
-    odp_options, _ = await GetManyData(db.odp, [], ODPOptionProjections)
+    odp_options = await GetAggregateData(db.odp, [], ODPOptionProjections)
     return JSONResponse(content={"odp_options": odp_options})
 
 
@@ -185,7 +192,7 @@ async def get_router_options(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     RouterOptionProjections = {"_id": 0, "title": "$name", "value": "$_id"}
-    router_options, _ = await GetManyData(db.router, [], RouterOptionProjections)
+    router_options = await GetAggregateData(db.router, [], RouterOptionProjections)
     return JSONResponse(content={"router_options": router_options})
 
 
@@ -202,7 +209,7 @@ async def get_package_options(
         "router_profile": 1,
         "bandwidth": 1,
     }
-    package_options, _ = await GetManyData(db.packages, [], PackageOptionProjections)
+    package_options = await GetAggregateData(db.packages, [], PackageOptionProjections)
     return JSONResponse(content={"package_options": package_options})
 
 
@@ -223,7 +230,7 @@ async def get_router_profile_options(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password))
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
 
         if response.status_code == 200:
             temp_profile = response.json()
@@ -251,7 +258,7 @@ async def get_province_options(
 
     pipeline = [{"$match": query}]
 
-    province_data, _ = await GetManyData(
+    province_data = await GetAggregateData(
         db.area_provinces, pipeline, ProvinceOptionProjections
     )
     return JSONResponse(content={"province_data": province_data})
@@ -270,7 +277,7 @@ async def get_regency_options(
 
     pipeline = [{"$match": query}]
 
-    regency_data, _ = await GetManyData(
+    regency_data = await GetAggregateData(
         db.area_regency, pipeline, RegencyOptionProjections
     )
     return JSONResponse(content={"regency_data": regency_data})
@@ -289,7 +296,7 @@ async def get_subdistrict_options(
 
     pipeline = [{"$match": query}]
 
-    subdistrict_data, _ = await GetManyData(
+    subdistrict_data = await GetAggregateData(
         db.area_subdistrict, pipeline, SubdistrictOptionProjections
     )
     return JSONResponse(content={"subdistrict_data": subdistrict_data})
@@ -308,7 +315,7 @@ async def get_village_options(
 
     pipeline = [{"$match": query}]
 
-    village_data, _ = await GetManyData(
+    village_data = await GetAggregateData(
         db.area_village, pipeline, VillageOptionProjections
     )
     return JSONResponse(content={"village_data": village_data})
@@ -337,7 +344,7 @@ async def get_whatsapp_contact_options(
             }
         },
     ]
-    user_data, _ = await GetManyData(db.users, pipeline, {"count": 1})
+    user_data = await GetAggregateData(db.users, pipeline, {"count": 1})
     user_data = [
         {
             "title": str(item["_id"]),
@@ -365,7 +372,7 @@ async def get_whatsapp_contact_options(
         },
         {"$unwind": "$package"},
     ]
-    package_data, _ = await GetManyData(
+    package_data = await GetAggregateData(
         db.customers, pipeline, {"package": 1, "count": 1}
     )
     package_data = [
@@ -397,7 +404,7 @@ async def get_whatsapp_contact_options(
         },
         {"$unwind": "$coverage_area"},
     ]
-    coverage_area_data, _ = await GetManyData(
+    coverage_area_data = await GetAggregateData(
         db.customers, pipeline, {"coverage_area": 1, "count": 1}
     )
     coverage_area_data = [
@@ -427,7 +434,7 @@ async def get_whatsapp_contact_options(
         },
         {"$unwind": "$odp"},
     ]
-    odp_data, _ = await GetManyData(db.customers, pipeline, {"odp": 1, "count": 1})
+    odp_data = await GetAggregateData(db.customers, pipeline, {"odp": 1, "count": 1})
     odp_data = [
         {
             "title": item.get("odp", "").get("name", "-"),

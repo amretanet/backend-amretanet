@@ -117,7 +117,7 @@ async def pay_off_payment(
         "id_invoice": ObjectId(id),
         "nominal": invoice_data.get("amount", 0),
         "category": "BAYAR TAGIHAN",
-        "description": f'Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get("service_number","-")} a/n {invoice_data.get("name","-")}, Periode {DateIDFormatter(invoice_data.get("due_date"))}',
+        "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
         "method": payload["method"],
         "date": GetCurrentDateTime(),
         "id_receiver": ObjectId(current_user.id),
@@ -177,7 +177,7 @@ async def confirm_payment(
             "id_invoice": ObjectId(id),
             "nominal": invoice_data.get("amount", 0),
             "category": "BAYAR TAGIHAN",
-            "description": f'Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get("service_number","-")} a/n {invoice_data.get("name","-")}, Periode {DateIDFormatter(invoice_data.get("due_date"))}',
+            "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
             "method": PaymentMethodData.TRANSFER.value,
             "date": GetCurrentDateTime(),
             "id_receiver": ObjectId(current_user.id),
@@ -188,6 +188,7 @@ async def confirm_payment(
         )
 
         await SendWhatsappPaymentSuccessMessage(db, id)
+        await SendTelegramPaymentMessage(db, id)
 
         customer_data = await GetOneData(
             db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
@@ -313,7 +314,7 @@ async def request_confirm_payment(
             "id_invoice": ObjectId(id_invoice),
             "type": NotificationTypeData.PAYMENT_CONFIRM.value,
             "title": "Konfirmasi Pembayaran",
-            "description": f'{exist_data.get("name","Pelanggan")} melakukan konfirmasi pembayaran',
+            "description": f"{exist_data.get('name', 'Pelanggan')} melakukan konfirmasi pembayaran",
             "is_read": 0,
             "created_at": GetCurrentDateTime(),
         }
@@ -375,7 +376,7 @@ async def create_virtual_account_payment(
         "customer_phone": exist_invoice.get("customer", "-").get("phone_number", "-"),
         "order_items": [
             {
-                "name": f"Pembayaran Layanan Amreta Net {exist_invoice.get('service_number','')}",
+                "name": f"Pembayaran Layanan Amreta Net {exist_invoice.get('service_number', '')}",
                 "price": amount,
                 "quantity": 1,
             },

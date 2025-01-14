@@ -23,6 +23,7 @@ from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -163,10 +164,9 @@ async def get_income_count(
     pipeline = [
         {"$match": query},
         {"$group": {"_id": None, "count": {"$sum": "$nominal"}}},
-        {"$project": {"_id": 0, "count": 1}},
     ]
 
-    income_count, _ = await GetManyData(db.incomes, pipeline, {})
+    income_count, _ = await GetManyData(db.incomes, pipeline, {"_id": 0, "count": 1})
     return JSONResponse(
         content={
             "income_count": income_count[0]["count"] if len(income_count) > 0 else 0
@@ -247,79 +247,80 @@ async def get_income_stats(
                 ],
             }
         },
-        {
-            "$project": {
-                "count": {"$arrayElemAt": ["$count.total", 0]},
-                "today": {"$arrayElemAt": ["$today.total", 0]},
-                "current_week": {"$arrayElemAt": ["$current_week.total", 0]},
-                "current_month": {"$arrayElemAt": ["$current_month.total", 0]},
-                "last_month": {"$arrayElemAt": ["$last_month.total", 0]},
-                "current_year": {"$arrayElemAt": ["$current_year.total", 0]},
-                "month_difference": {
-                    "$subtract": [
-                        {"$arrayElemAt": ["$current_month.total", 0]},
-                        {"$arrayElemAt": ["$last_month.total", 0]},
-                    ]
-                },
-                "month_difference_percentage": {
-                    "$cond": {
-                        "if": {"$ne": [{"$arrayElemAt": ["$last_month.total", 0]}, 0]},
-                        "then": {
-                            "$multiply": [
-                                {
-                                    "$divide": [
-                                        {
-                                            "$subtract": [
-                                                {
-                                                    "$arrayElemAt": [
-                                                        "$current_month.total",
-                                                        0,
-                                                    ]
-                                                },
-                                                {
-                                                    "$arrayElemAt": [
-                                                        "$last_month.total",
-                                                        0,
-                                                    ]
-                                                },
-                                            ]
-                                        },
-                                        {"$arrayElemAt": ["$last_month.total", 0]},
-                                    ]
-                                },
-                                100,
-                            ]
-                        },
-                        "else": 0,
-                    }
-                },
-                "month_trend": {
-                    "$cond": {
-                        "if": {
-                            "$gt": [
-                                {"$arrayElemAt": ["$current_month.total", 0]},
-                                {"$arrayElemAt": ["$last_month.total", 0]},
-                            ]
-                        },
-                        "then": "increase",
-                        "else": {
-                            "$cond": {
-                                "if": {
-                                    "$lt": [
-                                        {"$arrayElemAt": ["$current_month.total", 0]},
-                                        {"$arrayElemAt": ["$last_month.total", 0]},
-                                    ]
-                                },
-                                "then": "decrease",
-                                "else": "no_change",
-                            }
-                        },
-                    }
-                },
-            }
-        },
     ]
-    income_data, _ = await GetManyData(db.incomes, pipeline, {})
+    income_data = await GetAggregateData(
+        db.incomes,
+        pipeline,
+        {
+            "count": {"$arrayElemAt": ["$count.total", 0]},
+            "today": {"$arrayElemAt": ["$today.total", 0]},
+            "current_week": {"$arrayElemAt": ["$current_week.total", 0]},
+            "current_month": {"$arrayElemAt": ["$current_month.total", 0]},
+            "last_month": {"$arrayElemAt": ["$last_month.total", 0]},
+            "current_year": {"$arrayElemAt": ["$current_year.total", 0]},
+            "month_difference": {
+                "$subtract": [
+                    {"$arrayElemAt": ["$current_month.total", 0]},
+                    {"$arrayElemAt": ["$last_month.total", 0]},
+                ]
+            },
+            "month_difference_percentage": {
+                "$cond": {
+                    "if": {"$ne": [{"$arrayElemAt": ["$last_month.total", 0]}, 0]},
+                    "then": {
+                        "$multiply": [
+                            {
+                                "$divide": [
+                                    {
+                                        "$subtract": [
+                                            {
+                                                "$arrayElemAt": [
+                                                    "$current_month.total",
+                                                    0,
+                                                ]
+                                            },
+                                            {
+                                                "$arrayElemAt": [
+                                                    "$last_month.total",
+                                                    0,
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                    {"$arrayElemAt": ["$last_month.total", 0]},
+                                ]
+                            },
+                            100,
+                        ]
+                    },
+                    "else": 0,
+                }
+            },
+            "month_trend": {
+                "$cond": {
+                    "if": {
+                        "$gt": [
+                            {"$arrayElemAt": ["$current_month.total", 0]},
+                            {"$arrayElemAt": ["$last_month.total", 0]},
+                        ]
+                    },
+                    "then": "increase",
+                    "else": {
+                        "$cond": {
+                            "if": {
+                                "$lt": [
+                                    {"$arrayElemAt": ["$current_month.total", 0]},
+                                    {"$arrayElemAt": ["$last_month.total", 0]},
+                                ]
+                            },
+                            "then": "decrease",
+                            "else": "no_change",
+                        }
+                    },
+                }
+            },
+        },
+    )
     income_stats = income_data[0] if len(income_data) > 0 else {}
     pipeline = [
         {
@@ -329,7 +330,7 @@ async def get_income_stats(
         },
         {"$group": {"_id": None, "count": {"$sum": "$amount"}}},
     ]
-    invoice_data, _ = await GetManyData(db.invoices, pipeline)
+    invoice_data = await GetAggregateData(db.invoices, pipeline)
     invoice_stats = invoice_data[0] if len(invoice_data) > 0 else {}
     income_stats["unpaid"] = invoice_stats.get("count", 0)
 
@@ -354,8 +355,8 @@ async def get_cash_balance(
         {"$group": {"_id": "$month", "count": {"$sum": "$nominal"}}},
         {"$sort": SON([("_id", 1)])},
     ]
-    income_data, _ = await GetManyData(db.incomes, pipeline)
-    expenditure_data, _ = await GetManyData(db.expenditures, pipeline)
+    income_data = await GetAggregateData(db.incomes, pipeline, {"count": 1})
+    expenditure_data = await GetAggregateData(db.expenditures, pipeline, {"count": 1})
 
     categories = [
         "Januari",

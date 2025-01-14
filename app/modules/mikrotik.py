@@ -45,7 +45,6 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
             secret_id = result[0].get(".id", None)
 
         if secret_id:
-            print("ada secret", secret_id, pppoe_username, pppoe_password)
             # update exist secret
             data = {
                 "disabled": disabled,
@@ -55,7 +54,6 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
             if pppoe_password:
                 data["password"] = pppoe_password
 
-            print(data)
             url = urljoin(host, "/rest/ppp/secret")
             response = requests.patch(
                 f"{url}/{secret_id}",
@@ -81,7 +79,6 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
                 "disabled": disabled,
                 "comment": customer_data.get("name", "Undefined"),
             }
-            print(secret_data)
             url = urljoin(host, "/rest/ppp/secret/add")
             response = requests.post(
                 url,
@@ -92,7 +89,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
             result = response.json()
             if response.status_code != 200:
                 is_success = False
-            print(result)
+
         if disabled:
             DeleteMikrotikInterface(host, username, password, pppoe_username)
     except Exception as e:

@@ -217,19 +217,27 @@ async def send_broadcast_message(
             if payload["destination"] != "all":
                 query["role"] = int(payload["destination"])
 
-            user_data, _ = await GetManyData(db.users, [{"$match": query}])
+            user_data, _ = await GetManyData(
+                db.users, [{"$match": query}], {"phone_number": 1}
+            )
             contact_data = user_data
         elif payload["group"] == "package":
             query = {"id_package": ObjectId(payload["destination"])}
-            customer_data, _ = await GetManyData(db.customers, [{"$match": query}])
+            customer_data, _ = await GetManyData(
+                db.customers, [{"$match": query}], {"phone_number": 1}
+            )
             contact_data = customer_data
         elif payload["group"] == "coverage_area":
             query = {"id_coverage_area": ObjectId(payload["destination"])}
-            customer_data, _ = await GetManyData(db.customers, [{"$match": query}])
+            customer_data, _ = await GetManyData(
+                db.customers, [{"$match": query}], {"phone_number": 1}
+            )
             contact_data = customer_data
         elif payload["group"] == "odp":
             query = {"id_odp": ObjectId(payload["destination"])}
-            customer_data, _ = await GetManyData(db.customers, [{"$match": query}])
+            customer_data, _ = await GetManyData(
+                db.customers, [{"$match": query}], {"phone_number": 1}
+            )
             contact_data = customer_data
         else:
             raise HTTPException(

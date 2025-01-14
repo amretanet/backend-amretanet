@@ -22,6 +22,17 @@ async def GetOneData(
     return result
 
 
+async def GetAggregateData(v_db_collection, v_pipeline: list = [], v_projection={}):
+    pipeline = v_pipeline.copy()
+    if v_projection:
+        pipeline.append({"$project": v_projection})
+    result = await v_db_collection.aggregate(pipeline).to_list(None)
+    result = json.dumps(result, default=JsonObjectFormatter)
+    result = json.loads(result)
+
+    return result
+
+
 async def GetManyData(
     v_db_collection, v_query, v_projection={}, v_pagination: Pagination = {}
 ):

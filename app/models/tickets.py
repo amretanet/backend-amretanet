@@ -3,14 +3,6 @@ from pydantic import BaseModel
 from enum import Enum
 from app.models.generals import Location
 
-# responses
-TicketProjections = {
-    "name": 1,
-    "address": 1,
-    "capacity": 1,
-    "available": 1,
-}
-
 
 # schema
 class TicketEpidenceData(BaseModel):

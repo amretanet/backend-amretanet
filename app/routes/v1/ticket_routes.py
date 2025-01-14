@@ -36,11 +36,11 @@ from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
 )
-from app.models.tickets import TicketProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 
 router = APIRouter(prefix="/ticket", tags=["Tickets"])
@@ -168,7 +168,7 @@ async def get_tickets(
     ]
 
     ticket_data, count = await GetManyData(
-        db.tickets, pipeline, TicketProjections, {"page": page, "items": items}
+        db.tickets, pipeline, {}, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
     return JSONResponse(
@@ -221,8 +221,14 @@ async def get_ticket_stats(
             }
         }
     )
-    ticket_stats_data, _ = await GetManyData(db.tickets, pipeline)
-    return JSONResponse(content={"ticket_stats_data": ticket_stats_data[0]})
+    ticket_stats_data = await GetAggregateData(db.tickets, pipeline)
+    return JSONResponse(
+        content={
+            "ticket_stats_data": ticket_stats_data[0]
+            if len(ticket_stats_data) > 0
+            else []
+        }
+    )
 
 
 @router.post("/add")

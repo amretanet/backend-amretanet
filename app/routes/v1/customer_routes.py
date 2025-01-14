@@ -15,6 +15,7 @@ from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -265,7 +266,7 @@ async def get_customer_stats(
             }
         },
     ]
-    customer_stats_data, _ = await GetManyData(db.customers, pipeline)
+    customer_stats_data = await GetAggregateData(db.customers, pipeline)
     return JSONResponse(content={"customer_stats_data": customer_stats_data[0]})
 
 
@@ -275,10 +276,6 @@ async def get_customer_dashboard_info(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.CUSTOMER:
-        raise HTTPException(
-            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
-        )
     customer_invoice = {"amount": 0, "status": None}
     customer_package = {"name": None, "bandwidth": 0}
     month = str(GetCurrentDateTime().month).zfill(2)

@@ -37,6 +37,7 @@ router = APIRouter(prefix="/change-submission", tags=["Change Submissions"])
 
 @router.get("")
 async def get_change_submissions(
+    id_customer: str = None,
     key: str = None,
     status: ChangeSubmissionStatusData = None,
     page: int = 1,
@@ -45,6 +46,8 @@ async def get_change_submissions(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     query = {}
+    if id_customer:
+        query["id_customer"] = ObjectId(id_customer)
     if key:
         query["$or"] = [
             {"type": {"$regex": key, "$options": "i"}},

@@ -117,10 +117,11 @@ async def get_expenditure_stats(
     pipeline = [
         {"$match": query},
         {"$group": {"_id": None, "count": {"$sum": "$nominal"}}},
-        {"$project": {"_id": 0, "count": 1}},
     ]
 
-    expenditure_count, _ = await GetManyData(db.expenditures, pipeline, {})
+    expenditure_count, _ = await GetManyData(
+        db.expenditures, pipeline, {"_id": 0, "count": 1}
+    )
     return JSONResponse(
         content={
             "expenditure_count": expenditure_count[0]["count"]

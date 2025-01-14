@@ -10,6 +10,7 @@ from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteManyData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateManyData,
@@ -25,7 +26,7 @@ from app.modules.whatsapp_message import (
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-from app.modules.generals import GetCurrentDateTime, RemoveFilePath
+from app.modules.generals import GetCurrentDateTime, GetDueDateRange, RemoveFilePath
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
@@ -124,7 +125,7 @@ async def generate_invoice(
     pipeline = []
     query = {
         "status": CustomerStatusData.ACTIVE.value,
-        # "due_date": {"$in": GetDueDateRange(10)},
+        "due_date": {"$in": GetDueDateRange(10)},
     }
     if id_customer:
         query["_id"] = ObjectId(id_customer)
@@ -223,7 +224,7 @@ async def generate_invoice(
         }
     )
 
-    customer_data, _ = await GetManyData(db.customers, pipeline)
+    customer_data = await GetAggregateData(db.customers, pipeline)
     if len(customer_data) == 0:
         return
 
@@ -326,12 +327,12 @@ async def print_invoice_pdf(
         },
         {"$unwind": "$customer"},
     ]
-    invoice_data, count = await GetManyData(db.invoices, pipeline)
-    if count == 0:
+    invoice_data = await GetAggregateData(db.invoices, pipeline)
+    if len(invoice_data) == 0:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
     pdf_bytes = CreateInvoicePDF(invoice_data)
-    if count == 1:
+    if len(invoice_data) == 1:
         file_name = f"INVOICE-{invoice_data[0].get('name', '')}-{GetCurrentDateTime().timestamp()}.pdf"
     else:
         file_name = f"INVOICE-PELANGGAN-{GetCurrentDateTime().timestamp()}.pdf"
@@ -371,12 +372,12 @@ async def print_invoice_thermal(
         },
         {"$unwind": "$customer"},
     ]
-    invoice_data, count = await GetManyData(db.invoices, pipeline)
-    if count == 0:
+    invoice_data = await GetAggregateData(db.invoices, pipeline)
+    if len(invoice_data) == 0:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
     pdf_bytes = CreateInvoiceThermal(invoice_data)
-    if count == 1:
+    if len(invoice_data) == 1:
         file_name = f"INVOICE-{invoice_data[0].get('name', '')}-{GetCurrentDateTime().timestamp()}.pdf"
     else:
         file_name = f"INVOICE-PELANGGAN-{GetCurrentDateTime().timestamp()}.pdf"
@@ -404,19 +405,25 @@ async def invoice_whatsapp_reminder(
         to_date = (GetCurrentDateTime() + timedelta(days=5)).replace(
             hour=23, minute=59, second=59, microsecond=0
         )
-        invoice_data, _ = await GetManyData(
+        invoice_data = await GetAggregateData(
             db.invoices,
             [
                 {
                     "$match": {
                         "status": InvoiceStatusData.UNPAID.value,
                         "due_date": {"$gte": from_date, "$lte": to_date},
+                        "is_whatsapp_sended": {"$exists": False},
                     },
                 },
             ],
         )
         for item in invoice_data:
             await SendWhatsappPaymentReminderMessage(db, item["_id"])
+            await UpdateOneData(
+                db.invoices,
+                {"_id": ObjectId(item["_id"])},
+                {"$set": {"is_whatsapp_sended": True}},
+            )
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -735,5 +742,7 @@ async def delete_invoice(
     result = await DeleteManyData(db.invoices, {"_id": {"$in": id_list}})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    await DeleteManyData(db.incomes, {"id_invoice": {"$in": id_list}})
 
     return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
