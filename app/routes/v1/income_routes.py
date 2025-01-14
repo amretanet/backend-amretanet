@@ -105,9 +105,11 @@ async def get_incomes(
         {
             "$lookup": {
                 "from": "users",
-                "localField": "id_receiver",
-                "foreignField": "_id",
-                "pipeline": [{"$project": {"name": 1, "email": 1, "phone_number": 1}}],
+                "let": {"idReceiver": "$id_receiver"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idReceiver"]}}},
+                    {"$project": {"name": 1, "email": 1, "phone_number": 1}},
+                ],
                 "as": "receiver",
             }
         },

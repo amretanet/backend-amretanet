@@ -69,9 +69,11 @@ async def get_salaries(
         {
             "$lookup": {
                 "from": "users",
-                "localField": "id_user",
-                "foreignField": "_id",
-                "pipeline": [{"$project": {"name": 1, "email": 1, "phone_number": 1}}],
+                "let": {"idUser": "$id_user"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idUser"]}}},
+                    {"$project": {"name": 1, "email": 1, "phone_number": 1}},
+                ],
                 "as": "employee",
             }
         },

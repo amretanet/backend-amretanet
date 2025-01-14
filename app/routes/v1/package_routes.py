@@ -26,6 +26,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.models.packages import PackageProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 
 router = APIRouter(prefix="/package", tags=["Packages"])
@@ -56,7 +57,7 @@ async def get_packages(
     pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
 
     package_data, count = await GetManyData(
-        db.packages, pipeline, {}, {"page": page, "items": items}
+        db.packages, pipeline, PackageProjections, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
     return JSONResponse(

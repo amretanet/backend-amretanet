@@ -2,6 +2,19 @@ from typing import Optional
 from pydantic import BaseModel
 from enum import Enum
 
+# responses
+PackageProjections = {
+    "name": 1,
+    "router_profile": 1,
+    "bandwidth": 1,
+    "instalation_cost": 1,
+    "maximum_device": 1,
+    "price": 1,
+    "is_displayed": 1,
+    "category": 1,
+    "description": 1,
+}
+
 
 # schemas
 class PackageCategoryData(str, Enum):

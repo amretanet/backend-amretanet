@@ -11,6 +11,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.models.odc import ODCProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime, RemoveFilePath
 from app.modules.response_message import (
@@ -63,7 +64,7 @@ async def get_odc(
         return JSONResponse(content={"odc_maps_data": odc_maps_data})
 
     odc_data, count = await GetManyData(
-        db.odc, pipeline, {}, {"page": page, "items": items}
+        db.odc, pipeline, ODCProjections, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
     return JSONResponse(

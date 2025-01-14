@@ -78,7 +78,6 @@ async def get_users(
     pipeline = [
         {"$match": query},
         {"$sort": {"role": 1, "name": 1}},
-        {"$unset": ["password"]},
     ]
 
     user_data, count = await GetManyData(

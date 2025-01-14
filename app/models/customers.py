@@ -3,6 +3,21 @@ from pydantic import BaseModel
 from app.models.generals import GenderData
 from enum import Enum
 
+# responses
+CustomerProjections = {
+    "name": 1,
+    "service_number": 1,
+    "location": 1,
+    "created_at": 1,
+    "odp_name": 1,
+    "phone_number": 1,
+    "status": 1,
+    "ppn": 1,
+    "due_date": 1,
+    "billing": 1,
+    "referral": 1,
+}
+
 
 # schemas
 class CustomerStatusData(int, Enum):

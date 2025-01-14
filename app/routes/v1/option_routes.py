@@ -337,7 +337,7 @@ async def get_whatsapp_contact_options(
             }
         },
     ]
-    user_data, _ = await GetManyData(db.users, pipeline)
+    user_data, _ = await GetManyData(db.users, pipeline, {"count": 1})
     user_data = [
         {
             "title": str(item["_id"]),
@@ -358,14 +358,16 @@ async def get_whatsapp_contact_options(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "_id",
-                "foreignField": "_id",
+                "let": {"idPackage": "$_id"},
+                "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}}],
                 "as": "package",
             }
         },
         {"$unwind": "$package"},
     ]
-    package_data, _ = await GetManyData(db.customers, pipeline)
+    package_data, _ = await GetManyData(
+        db.customers, pipeline, {"package": 1, "count": 1}
+    )
     package_data = [
         {
             "title": item.get("package", "").get("name", "-"),
@@ -386,14 +388,18 @@ async def get_whatsapp_contact_options(
         {
             "$lookup": {
                 "from": "coverage_areas",
-                "localField": "_id",
-                "foreignField": "_id",
+                "let": {"idCoverageArea": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idCoverageArea"]}}}
+                ],
                 "as": "coverage_area",
             }
         },
         {"$unwind": "$coverage_area"},
     ]
-    coverage_area_data, _ = await GetManyData(db.customers, pipeline)
+    coverage_area_data, _ = await GetManyData(
+        db.customers, pipeline, {"coverage_area": 1, "count": 1}
+    )
     coverage_area_data = [
         {
             "title": item.get("coverage_area", "").get("name", "-"),
@@ -414,14 +420,14 @@ async def get_whatsapp_contact_options(
         {
             "$lookup": {
                 "from": "odp",
-                "localField": "_id",
-                "foreignField": "_id",
+                "let": {"idOdp": "$_id"},
+                "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$idOdp"]}}}],
                 "as": "odp",
             }
         },
         {"$unwind": "$odp"},
     ]
-    odp_data, _ = await GetManyData(db.customers, pipeline)
+    odp_data, _ = await GetManyData(db.customers, pipeline, {"odp": 1, "count": 1})
     odp_data = [
         {
             "title": item.get("odp", "").get("name", "-"),

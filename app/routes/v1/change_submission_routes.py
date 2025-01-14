@@ -60,20 +60,24 @@ async def get_change_submissions(
         {
             "$lookup": {
                 "from": "customers",
-                "localField": "id_customer",
-                "foreignField": "_id",
+                "let": {"idCustomer": "$id_customer"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idCustomer"]}}},
+                    {"$project": {"name": 1, "service_number": 1}},
+                ],
                 "as": "customer",
-                "pipeline": [{"$project": {"name": 1, "service_number": 1}}],
             }
         },
         {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_package",
-                "foreignField": "_id",
+                "let": {"idPackage": "$id_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "package",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {"$unwind": {"path": "$package", "preserveNullAndEmptyArrays": True}},

@@ -12,6 +12,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.models.router import RouterProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime
 from app.modules.response_message import (
@@ -52,7 +53,7 @@ async def get_router(
     pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
 
     router_data, count = await GetManyData(
-        db.router, pipeline, {}, {"page": page, "items": items}
+        db.router, pipeline, RouterProjections, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
     return JSONResponse(

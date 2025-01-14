@@ -11,6 +11,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.models.odp import ODPProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime, RemoveFilePath
 from app.modules.response_message import (
@@ -57,18 +58,22 @@ async def get_odp(
         {
             "$lookup": {
                 "from": "odc",
-                "localField": "id_parent",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idParent": "$id_parent"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idParent"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "odc",
             }
         },
         {
             "$lookup": {
                 "from": "odp",
-                "localField": "id_parent",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idParent": "$id_parent"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idParent"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "odp",
             }
         },
@@ -82,7 +87,6 @@ async def get_odp(
                 }
             }
         },
-        {"$unset": ["odc", "odp"]},
     ]
 
     odp_maps_data, _ = await GetManyData(
@@ -98,7 +102,7 @@ async def get_odp(
         return JSONResponse(content={"odp_maps_data": odp_maps_data})
 
     odp_data, count = await GetManyData(
-        db.odp, pipeline, {}, {"page": page, "items": items}
+        db.odp, pipeline, ODPProjections, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
 

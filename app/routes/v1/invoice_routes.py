@@ -85,10 +85,16 @@ async def get_invoice(
         {
             "$lookup": {
                 "from": "customers",
-                "localField": "id_customer",
-                "foreignField": "_id",
+                "let": {"idCustomer": "$id_customer"},
                 "pipeline": [
-                    {"$project": {"status": 1, "id_package": 1, "id_add_on_package": 1}}
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idCustomer"]}}},
+                    {
+                        "$project": {
+                            "status": 1,
+                            "id_package": 1,
+                            "id_add_on_package": 1,
+                        }
+                    },
                 ],
                 "as": "customer",
             }
@@ -131,9 +137,9 @@ async def generate_invoice(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_package",
-                "foreignField": "_id",
+                "let": {"idPackage": "$id_package"},
                 "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
                     {
                         "$project": {
                             "name": 1,
@@ -161,9 +167,9 @@ async def generate_invoice(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_add_on_package",
-                "foreignField": "_id",
+                "let": {"idAddOnPackage": "$id_add_on_package"},
                 "pipeline": [
+                    {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}},
                     {
                         "$project": {
                             "name": 1,
@@ -303,9 +309,9 @@ async def print_invoice_pdf(
         {
             "$lookup": {
                 "from": "customers",
-                "localField": "id_customer",
-                "foreignField": "_id",
+                "let": {"idCustomer": "$id_customer"},
                 "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idCustomer"]}}},
                     {
                         "$project": {
                             "name": 1,
@@ -313,7 +319,7 @@ async def print_invoice_pdf(
                             "phone_number": 1,
                             "address": "$location.address",
                         },
-                    }
+                    },
                 ],
                 "as": "customer",
             }
@@ -348,9 +354,9 @@ async def print_invoice_thermal(
         {
             "$lookup": {
                 "from": "customers",
-                "localField": "id_customer",
-                "foreignField": "_id",
+                "let": {"idCustomer": "$id_customer"},
                 "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idCustomer"]}}},
                     {
                         "$project": {
                             "name": 1,
@@ -358,7 +364,7 @@ async def print_invoice_thermal(
                             "phone_number": 1,
                             "address": "$location.address",
                         },
-                    }
+                    },
                 ],
                 "as": "customer",
             }
@@ -538,9 +544,9 @@ async def update_invoice(
             {
                 "$lookup": {
                     "from": "packages",
-                    "localField": "id_package",
-                    "foreignField": "_id",
+                    "let": {"idPackage": "$id_package"},
                     "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
                         {
                             "$project": {
                                 "name": 1,
@@ -568,9 +574,9 @@ async def update_invoice(
             {
                 "$lookup": {
                     "from": "packages",
-                    "localField": "id_add_on_package",
-                    "foreignField": "_id",
+                    "let": {"idAddOnPackage": "$id_add_on_package"},
                     "pipeline": [
+                        {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}},
                         {
                             "$project": {
                                 "name": 1,

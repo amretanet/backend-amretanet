@@ -6,6 +6,7 @@ from app.models.customers import (
     CustomerRegisterData,
     CustomerStatusData,
     CustomerUpdateData,
+    CustomerProjections,
 )
 from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
@@ -96,9 +97,11 @@ async def get_customers(
         {
             "$lookup": {
                 "from": "odp",
-                "localField": "id_odp",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idOdp": "$id_odp"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idOdp"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "odp",
             }
         }
@@ -116,9 +119,11 @@ async def get_customers(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_package",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idPackage": "$id_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "package",
             }
         }
@@ -138,9 +143,10 @@ async def get_customers(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_add_on_package",
-                "foreignField": "_id",
-                "pipeline": [],
+                "let": {"idAddOnPackage": "$id_add_on_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}},
+                ],
                 "as": "add_on_packages",
             }
         }
@@ -170,25 +176,6 @@ async def get_customers(
         }
     )
 
-    # add projection query
-    pipeline.append(
-        {
-            "$project": {
-                "name": 1,
-                "service_number": 1,
-                "location": 1,
-                "created_at": 1,
-                "odp_name": 1,
-                "phone_number": 1,
-                "status": 1,
-                "ppn": 1,
-                "due_date": 1,
-                "billing": 1,
-                "referral": 1,
-            }
-        }
-    )
-
     customer_maps_data, _ = await GetManyData(
         db.customers,
         [],
@@ -198,7 +185,7 @@ async def get_customers(
         return JSONResponse(content={"customer_maps_data": customer_maps_data})
 
     customer_data, count = await GetManyData(
-        db.customers, pipeline, {}, {"page": page, "items": items}
+        db.customers, pipeline, CustomerProjections, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
 
@@ -336,9 +323,11 @@ async def get_customer_detail(
         {
             "$lookup": {
                 "from": "odp",
-                "localField": "id_odp",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idOdp": "$id_odp"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idOdp"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "odp",
             }
         }
@@ -355,9 +344,11 @@ async def get_customer_detail(
         {
             "$lookup": {
                 "from": "router",
-                "localField": "id_router",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idRouter": "$id_router"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idRouter"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "router",
             }
         }
@@ -376,9 +367,11 @@ async def get_customer_detail(
         {
             "$lookup": {
                 "from": "coverage_areas",
-                "localField": "id_coverage_area",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idCoverageArea": "$id_coverage_area"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idCoverageArea"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "coverage_area",
             }
         }
@@ -398,9 +391,11 @@ async def get_customer_detail(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_package",
-                "foreignField": "_id",
-                "pipeline": [{"$limit": 1}],
+                "let": {"idPackage": "$id_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "package",
             }
         }
@@ -420,9 +415,10 @@ async def get_customer_detail(
         {
             "$lookup": {
                 "from": "packages",
-                "localField": "id_add_on_package",
-                "foreignField": "_id",
-                "pipeline": [],
+                "let": {"idAddOnPackage": "$id_add_on_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}}
+                ],
                 "as": "add_on_packages",
             }
         }
@@ -451,7 +447,9 @@ async def get_customer_detail(
             },
         }
     )
-    customer_data, _ = await GetManyData(db.customers, pipeline)
+    customer_data, _ = await GetManyData(
+        db.customers, pipeline, {}, {"page": 1, "items": 1}
+    )
 
     return JSONResponse(
         content={"customer_data": customer_data[0] if len(customer_data) > 0 else {}}
@@ -617,7 +615,7 @@ async def create_customer(
         )
     try:
         payload = data.dict(exclude_unset=True)
-        payload["service_number"] = 2900000
+        payload["service_number"] = 1900000
         lates_service_number = await GetOneData(
             db.customers,
             {"service_number": {"$exists": True}},
@@ -627,8 +625,8 @@ async def create_customer(
         if lates_service_number:
             payload["service_number"] = int(lates_service_number["service_number"]) + 1
 
-        payload["pppoe_username"] = payload["service_number"]
-        payload["pppoe_password"] = GenerateRandomString(payload["service_number"])
+        payload["pppoe_username"] = str(payload["service_number"])
+        payload["pppoe_password"] = GenerateRandomString(str(payload["service_number"]))
 
         # check exist id card number
         exist_id_card_number = await GetOneData(
@@ -666,8 +664,6 @@ async def create_customer(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
-
-            # set service number
 
         # check package profile
         package_data = await GetOneData(

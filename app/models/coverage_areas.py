@@ -1,5 +1,13 @@
 from pydantic import BaseModel
 
+# responses
+CoverageAreaProjections = {
+    "name": 1,
+    "address": 1,
+    "capacity": 1,
+    "available": 1,
+}
+
 
 # schemas
 class CoverageAddressData(BaseModel):

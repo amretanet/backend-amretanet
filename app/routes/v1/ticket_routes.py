@@ -40,6 +40,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.models.tickets import TicketProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 
 router = APIRouter(prefix="/ticket", tags=["Tickets"])
@@ -76,62 +77,77 @@ async def get_tickets(
         {
             "$lookup": {
                 "from": "users",
-                "localField": "id_reporter",
-                "foreignField": "_id",
+                "let": {"idReporter": "$id_reporter"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idReporter"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "reporter",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {
             "$lookup": {
                 "from": "users",
-                "localField": "id_assignee",
-                "foreignField": "_id",
+                "let": {"idAssignee": "$id_assignee"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idAssignee"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "assignee",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {
             "$lookup": {
                 "from": "odc",
-                "localField": "id_odc",
-                "foreignField": "_id",
+                "let": {"idOdc": "$id_odc"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idOdc"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "odc",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {
             "$lookup": {
                 "from": "odp",
-                "localField": "id_odp",
-                "foreignField": "_id",
+                "let": {"idOdp": "$id_odp"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idOdp"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "odp",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {
             "$lookup": {
                 "from": "users",
-                "localField": "id_assignee",
-                "foreignField": "_id",
+                "let": {"idAssignee": "$id_assignee"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idAssignee"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "assignee",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {
             "$lookup": {
                 "from": "users",
-                "localField": "created_by",
-                "foreignField": "_id",
+                "let": {"createdBy": "$created_by"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$createdBy"]}}},
+                    {"$project": {"name": 1}},
+                ],
                 "as": "creator",
-                "pipeline": [{"$project": {"name": 1}}],
             }
         },
         {
             "$lookup": {
                 "from": "customers",
-                "localField": "id_reporter",
-                "foreignField": "id_user",
+                "let": {"idReporter": "$id_parent"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$id_user", "$$idReporter"]}}},
+                    {"$limit": 1},
+                ],
                 "as": "customer",
             }
         },
@@ -152,7 +168,7 @@ async def get_tickets(
     ]
 
     ticket_data, count = await GetManyData(
-        db.tickets, pipeline, {}, {"page": page, "items": items}
+        db.tickets, pipeline, TicketProjections, {"page": page, "items": items}
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
     return JSONResponse(
@@ -216,7 +232,7 @@ async def create_ticket(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
-    payload["name"] = f'{payload["type"].value}-{int(GetCurrentDateTime().timestamp())}'
+    payload["name"] = f"{payload['type'].value}-{int(GetCurrentDateTime().timestamp())}"
     payload["status"] = TicketStatusData.OPEN
     if "id_assignee" in payload and payload["id_assignee"]:
         payload["id_assignee"] = ObjectId(payload["id_assignee"])

@@ -11,6 +11,7 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateOneData,
 )
+from app.models.coverage_areas import CoverageAreaProjections
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import GetCurrentDateTime
 from app.modules.response_message import (
@@ -61,7 +62,10 @@ async def get_coverage_areas(
         )
 
     coverage_area_data, count = await GetManyData(
-        db.coverage_areas, pipeline, {}, {"page": page, "items": items}
+        db.coverage_areas,
+        pipeline,
+        CoverageAreaProjections,
+        {"page": page, "items": items},
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
 
