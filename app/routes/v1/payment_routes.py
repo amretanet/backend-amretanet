@@ -18,10 +18,12 @@ from app.models.payments import (
 from app.models.customers import CustomerStatusData
 from app.modules.response_message import NOT_FOUND_MESSAGE, SYSTEM_ERROR_MESSAGE
 from fastapi.responses import JSONResponse
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.modules.generals import DateIDFormatter, GetCurrentDateTime
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
+    CreateOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -53,11 +55,6 @@ TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
 router = APIRouter(prefix="/payment", tags=["Payments"])
 
 
-@router.get("/testing")
-async def testing(db: AsyncIOMotorClient = Depends(GetAmretaDatabase)):
-    await SendTelegramPaymentMessage(db, "67619a402db670d0e7bb672c")
-
-
 @router.get("/channel")
 async def get_payment_channel(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
@@ -69,15 +66,16 @@ async def get_payment_channel(
     url = "https://tripay.co.id/api/merchant/payment-channel"
 
     channel_options = []
-    try:
-        response = requests.get(url, headers=headers)
-        response = response.json()
-        if response["success"]:
-            channel_options = response["data"]
+    return channel_options
+    # try:
+    #     response = requests.get(url, headers=headers, timeout=5)
+    #     response = response.json()
+    #     if response["success"]:
+    #         channel_options = response["data"]
 
-        return channel_options
-    except requests.exceptions.RequestException:
-        return channel_options
+    #     return channel_options
+    # except requests.exceptions.RequestException:
+    #     return channel_options
 
 
 @router.put("/pay-off/{id}")
@@ -197,7 +195,7 @@ async def confirm_payment(
             continue
 
         status = customer_data.get("status", None)
-        if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
+        if status != CustomerStatusData.ACTIVE and status != CustomerStatusData.FREE:
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice_data["id_customer"])},
@@ -310,7 +308,7 @@ async def request_confirm_payment(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
-        payment_notification_data = {
+        notification_data = {
             "id_invoice": ObjectId(id_invoice),
             "type": NotificationTypeData.PAYMENT_CONFIRM.value,
             "title": "Konfirmasi Pembayaran",
@@ -318,12 +316,21 @@ async def request_confirm_payment(
             "is_read": 0,
             "created_at": GetCurrentDateTime(),
         }
-        await UpdateOneData(
-            db.notifications,
-            {"id_invoice": ObjectId(id_invoice)},
-            {"$set": payment_notification_data},
-            upsert=True,
+        admin_user = await GetAggregateData(
+            db.users,
+            [
+                {
+                    "$match": {
+                        "role": UserRole.ADMIN,
+                    }
+                }
+            ],
         )
+        if len(admin_user) > 0:
+            for user in admin_user:
+                notification_data["id_user"] = ObjectId(user["_id"])
+                await CreateOneData(db.notifications, notification_data)
+
         return JSONResponse(
             content={"message": "Permintaan Konfirmasi Pembayaran Telah Dikirimkan"}
         )

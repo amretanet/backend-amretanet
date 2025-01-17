@@ -90,6 +90,11 @@ async def get_ticket_title_options(
 ):
     ticket_title_options = [
         {
+            "title": "Pemasangan Baru",
+            "type": "PSB",
+            "value": "Pemasangan Baru",
+        },
+        {
             "title": "Gangguan Pada Jaringan",
             "type": "TKT",
             "value": "Gangguan Pada Jaringan",
@@ -143,11 +148,6 @@ async def get_ticket_title_options(
             "title": "Pembangunan Baru",
             "type": "FOM",
             "value": "Pembangunan Baru",
-        },
-        {
-            "title": "Pemasangan Baru",
-            "type": "PSB",
-            "value": "Pemasangan Baru",
         },
     ]
 

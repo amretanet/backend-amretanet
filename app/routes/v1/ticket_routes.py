@@ -29,7 +29,7 @@ from app.models.tickets import (
     TicketTypeData,
     TicketUpdateData,
 )
-from app.models.users import UserData
+from app.models.users import UserData, UserRole
 from app.models.generals import Pagination
 from app.modules.generals import GetCurrentDateTime
 from app.routes.v1.auth_routes import GetCurrentUser
@@ -143,7 +143,7 @@ async def get_tickets(
         {
             "$lookup": {
                 "from": "customers",
-                "let": {"idReporter": "$id_parent"},
+                "let": {"idReporter": "$id_reporter"},
                 "pipeline": [
                     {"$match": {"$expr": {"$eq": ["$id_user", "$$idReporter"]}}},
                     {"$limit": 1},
@@ -240,10 +240,19 @@ async def create_ticket(
     payload = data.dict(exclude_unset=True)
     payload["name"] = f"{payload['type'].value}-{int(GetCurrentDateTime().timestamp())}"
     payload["status"] = TicketStatusData.OPEN
-    if "id_assignee" in payload and payload["id_assignee"]:
-        payload["id_assignee"] = ObjectId(payload["id_assignee"])
+    notification_data = {}
     if "id_reporter" in payload and payload["id_reporter"]:
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
+    if "id_assignee" in payload and payload["id_assignee"]:
+        payload["id_assignee"] = ObjectId(payload["id_assignee"])
+        notification_data = {
+            "id_user": payload["id_assignee"],
+            "title": f"Tiket {payload['name']} OPEN",
+            "description": payload["title"],
+            "type": NotificationTypeData.TICKET.value,
+            "is_read": 0,
+            "created_at": GetCurrentDateTime(),
+        }
     if "id_odc" in payload and payload["id_odc"] is not None:
         payload["id_odc"] = ObjectId(payload["id_odc"])
     if "id_odp" in payload and payload["id_odp"] is not None:
@@ -255,6 +264,8 @@ async def create_ticket(
     if not result.inserted_id:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    if notification_data:
+        await CreateOneData(db.notifications, notification_data)
     await SendWhatsappTicketOpenMessage(db, str(result.inserted_id))
     await SendTelegramTicketOpenMessage(db, str(result.inserted_id))
 
@@ -269,6 +280,10 @@ async def update_ticket(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
+    exist_data = await GetOneData(db.tickets, {"_id": ObjectId(id)})
+    if not exist_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
     if "id_reporter" in payload and payload["id_reporter"]:
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
     if "id_assignee" in payload:
@@ -277,10 +292,6 @@ async def update_ticket(
         payload["id_odc"] = ObjectId(payload["id_odc"])
     if "id_odp" in payload and payload["id_odp"] is not None:
         payload["id_odp"] = ObjectId(payload["id_odp"])
-
-    exist_data = await GetOneData(db.tickets, {"_id": ObjectId(id)})
-    if not exist_data:
-        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
     payload["updated_at"] = GetCurrentDateTime()
     payload["updated_by"] = ObjectId(current_user.id)
@@ -294,12 +305,13 @@ async def update_ticket(
         and exist_data["id_assignee"] != str(payload["id_assignee"])
     ) or ("id_assignee" not in exist_data):
         notification_data = {
-            "title": exist_data["title"],
             "id_user": payload["id_assignee"],
-            "description": exist_data["description"],
+            "title": f"Tiket {exist_data.get('name', '')} {payload['status'] if 'status' in payload else exist_data.get('status', 'OPEN')}",
+            "description": payload["title"]
+            if "title" in payload
+            else exist_data.get("title", ""),
             "type": NotificationTypeData.TICKET.value,
             "is_read": 0,
-            "id_reporter": ObjectId(exist_data["id_reporter"]),
             "created_at": GetCurrentDateTime(),
         }
         await CreateOneData(db.notifications, notification_data)
@@ -340,6 +352,22 @@ async def close_ticket(
             {"id_user": ObjectId(exist_data.get("id_reporter"))},
             {"$set": customer_update_data},
         )
+
+    notification_data = {
+        "title": f"Tiket {exist_data.get('name', '')} {payload['status']}",
+        "description": "Tiket Telah Selesai Dikerjakan",
+        "type": NotificationTypeData.TICKET.value,
+        "is_read": 0,
+        "created_at": GetCurrentDateTime(),
+    }
+
+    admin_user = await GetAggregateData(
+        db.users, [{"$match": {"role": UserRole.ADMIN}}]
+    )
+    if len(admin_user) > 0:
+        for user in admin_user:
+            notification_data["id_user"] = ObjectId(user["_id"])
+            await CreateOneData(db.notifications, notification_data)
 
     await SendWhatsappTicketClosedMessage(db, id)
     await SendTelegramTicketClosedMessage(db, id)

@@ -146,7 +146,13 @@ async def get_customers(
                 "from": "packages",
                 "let": {"idAddOnPackage": "$id_add_on_package"},
                 "pipeline": [
-                    {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}},
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
+                            }
+                        }
+                    }
                 ],
                 "as": "add_on_packages",
             }
@@ -414,7 +420,13 @@ async def get_customer_detail(
                 "from": "packages",
                 "let": {"idAddOnPackage": "$id_add_on_package"},
                 "pipeline": [
-                    {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}}
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
+                            }
+                        }
+                    }
                 ],
                 "as": "add_on_packages",
             }
@@ -560,8 +572,8 @@ async def register_customer(
         # formatting payload
         payload["id_user"] = insert_user_result.inserted_id
         payload["id_package"] = ObjectId(payload["id_package"])
-        payload["pppoe_username"] = payload["service_number"]
-        payload["pppoe_password"] = GenerateRandomString(payload["service_number"])
+        payload["pppoe_username"] = str(payload["service_number"])
+        payload["pppoe_password"] = GenerateRandomString(str(payload["service_number"]))
         payload["status"] = CustomerStatusData.PENDING.value
         payload["registered_at"] = GetCurrentDateTime()
         insert_customer_result = await CreateOneData(db.customers, payload)
@@ -572,24 +584,30 @@ async def register_customer(
             )
         ticket_data = {
             "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
-            "status": TicketStatusData.OPEN,
+            "status": TicketStatusData.PENDING,
             "id_reporter": insert_user_result.inserted_id,
             "id_assignee": None,
             "title": "Pemasangan Baru",
-            "description": "Instalasi jaringan baru untuk Customer",
+            "description": "Instalasi jaringan baru untuk Pelanggan",
             "created_at": GetCurrentDateTime(),
             "created_by": insert_user_result.inserted_id,
         }
         await CreateOneData(db.tickets, ticket_data)
         notification_data = {
             "title": "Pemasangan Baru",
-            "description": "Instalasi jaringan baru untuk Customer",
+            "description": "Instalasi jaringan baru untuk Pelanggan",
             "type": NotificationTypeData.TICKET.value,
             "is_read": 0,
             "id_reporter": insert_user_result.inserted_id,
             "created_at": GetCurrentDateTime(),
         }
-        await CreateOneData(db.notifications, notification_data)
+        admin_user = await GetAggregateData(
+            db.users, [{"$match": {"role": UserRole.ADMIN}}]
+        )
+        if len(admin_user) > 0:
+            for user in admin_user:
+                notification_data["id_user"] = ObjectId(user["_id"])
+                await CreateOneData(db.notifications, notification_data)
 
         return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 

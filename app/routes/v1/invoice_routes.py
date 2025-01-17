@@ -170,7 +170,13 @@ async def generate_invoice(
                 "from": "packages",
                 "let": {"idAddOnPackage": "$id_add_on_package"},
                 "pipeline": [
-                    {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}},
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
+                            }
+                        }
+                    },
                     {
                         "$project": {
                             "name": 1,
@@ -582,7 +588,16 @@ async def update_invoice(
                     "from": "packages",
                     "let": {"idAddOnPackage": "$id_add_on_package"},
                     "pipeline": [
-                        {"$match": {"$expr": {"$in": ["$_id", "$$idAddOnPackage"]}}},
+                        {
+                            "$match": {
+                                "$expr": {
+                                    "$in": [
+                                        "$_id",
+                                        {"$ifNull": ["$$idAddOnPackage", []]},
+                                    ]
+                                }
+                            }
+                        },
                         {
                             "$project": {
                                 "name": 1,

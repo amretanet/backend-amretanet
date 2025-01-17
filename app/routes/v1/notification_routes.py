@@ -11,6 +11,7 @@ from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
     DeleteManyData,
     DeleteOneData,
+    GetAggregateData,
     GetDataCount,
     GetManyData,
     GetOneData,
@@ -34,15 +35,21 @@ async def get_notifications(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    pipeline = []
+    pipeline = [
+        {
+            "$match": {
+                "id_user": ObjectId(current_user.id),
+            }
+        }
+    ]
     if type:
         pipeline.append({"$match": {"type": type.value}})
 
     pipeline.append({"$sort": {"created_at": -1}})
 
-    notification_data, _ = await GetManyData(db.notifications, pipeline)
+    notification_data = await GetAggregateData(db.notifications, pipeline)
     notification_count = await GetDataCount(
-        db.notifications, {"is_read": 0, "type": type.value}
+        db.notifications, {"is_read": 0, "id_user": ObjectId(current_user.id)}
     )
     return JSONResponse(
         content={
@@ -78,7 +85,9 @@ async def read_all_notification(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     result = await UpdateManyData(
-        db.notifications, {"type": type.value}, {"$set": {"is_read": 1}}
+        db.notifications,
+        {"type": type.value, "id_user": ObjectId(current_user.id)},
+        {"$set": {"is_read": 1}},
     )
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
@@ -109,7 +118,9 @@ async def delete_all_notification(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    result = await DeleteManyData(db.notifications, {"type": type.value})
+    result = await DeleteManyData(
+        db.notifications, {"type": type.value, "id_user": ObjectId(current_user.id)}
+    )
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 

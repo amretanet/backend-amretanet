@@ -284,3 +284,35 @@ async def get_log_data(
         print(e)
 
     return JSONResponse(content={"log_data": log_data})
+
+
+@router.get("/reboot")
+async def reboot_mikrotik(
+    router: str,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
+
+    exist_router = await GetOneData(db.router, {"name": router})
+    if not exist_router:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
+    url = urljoin(host, "/rest/system/reboot")
+    username = exist_router.get("username", "")
+    password = exist_router.get("password", "")
+    try:
+        response = requests.get(
+            url,
+            auth=HTTPBasicAuth(username, password),
+            verify=False,
+            timeout=10,
+        )
+    except requests.exceptions.RequestException as e:
+        print(e)
+
+    return JSONResponse(content={"message": "Mikrotik Telah Direboot"})
