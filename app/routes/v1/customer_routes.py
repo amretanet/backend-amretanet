@@ -27,7 +27,10 @@ from app.modules.generals import (
     GenerateReferralCode,
     GetCurrentDateTime,
 )
-from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
+from app.modules.whatsapp_message import (
+    SendWhatsappMessage,
+    SendWhatsappTicketOpenMessage,
+)
 from app.modules.telegram_message import SendTelegramTicketOpenMessage
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
@@ -881,6 +884,50 @@ async def update_customer_status(
         raise http_err
     except Exception as e:
         print(e)
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+
+@router.put("/reject/{id}")
+async def reject_customer(
+    id: str,
+    reason: str = Body(..., embed=True),
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
+    try:
+        exist_data = await GetOneData(db.customers, {"_id": ObjectId(id)})
+        if not exist_data:
+            raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+        result = await DeleteOneData(db.customers, {"_id": ObjectId(id)})
+        if not result.deleted_count:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
+
+        if "id_user" in exist_data:
+            await DeleteOneData(db.users, {"_id": ObjectId(exist_data["id_user"])})
+
+        await DeleteMikrotikPPPSecret(db, exist_data)
+        v_message = "*Pengajuan Pelanggan Ditolak* \n\n"
+        v_message += f"Mohon maaf, Pengajuan pelanggan atas nama {exist_data.get('name')} ditolak dengan alasan {reason}"
+        await SendWhatsappMessage(exist_data.get("phone_number"), v_message)
+        if "referral" in exist_data:
+            referral_user = await GetOneData(
+                db.users, {"referral": exist_data.get("referral")}
+            )
+            if referral_user:
+                await SendWhatsappMessage(referral_user.get("phone_number"), v_message)
+
+        return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
+
+    except HTTPException as http_err:
+        raise http_err
+    except Exception:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
