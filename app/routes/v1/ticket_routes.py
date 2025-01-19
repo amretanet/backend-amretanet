@@ -288,6 +288,7 @@ async def update_ticket(
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
     if "id_assignee" in payload:
         payload["id_assignee"] = ObjectId(payload["id_assignee"])
+        payload["status"] = TicketStatusData.OPEN.value
     if "id_odc" in payload and payload["id_odc"] is not None:
         payload["id_odc"] = ObjectId(payload["id_odc"])
     if "id_odp" in payload and payload["id_odp"] is not None:
@@ -315,6 +316,9 @@ async def update_ticket(
             "created_at": GetCurrentDateTime(),
         }
         await CreateOneData(db.notifications, notification_data)
+        await SendWhatsappTicketOpenMessage(
+            db, exist_data["_id"], is_only_assignee=True
+        )
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 

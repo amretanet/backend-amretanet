@@ -19,7 +19,7 @@ from app.models.customers import CustomerStatusData
 from app.modules.response_message import NOT_FOUND_MESSAGE, SYSTEM_ERROR_MESSAGE
 from fastapi.responses import JSONResponse
 from app.models.users import UserData, UserRole
-from app.modules.generals import DateIDFormatter, GetCurrentDateTime
+from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
     CreateOneData,
@@ -141,6 +141,15 @@ async def pay_off_payment(
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
+    notification_data = {
+        "id_user": ObjectId(customer_data["id_user"]),
+        "title": "Tagihan Telah Dibayar",
+        "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
+        "type": NotificationTypeData.OTHER.value,
+        "is_read": 0,
+        "created_at": GetCurrentDateTime(),
+    }
+    await CreateOneData(db.notifications, notification_data)
     return JSONResponse(content={"message": "Pembayaran Telah Dilunasi!"})
 
 
@@ -203,6 +212,15 @@ async def confirm_payment(
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
+        notification_data = {
+            "id_user": ObjectId(customer_data["id_user"]),
+            "title": "Tagihan Telah Dibayar",
+            "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
+            "type": NotificationTypeData.OTHER.value,
+            "is_read": 0,
+            "created_at": GetCurrentDateTime(),
+        }
+        await CreateOneData(db.notifications, notification_data)
     return JSONResponse(content={"message": "Pembayaran Telah Dikonfirmasi!"})
 
 

@@ -10,7 +10,7 @@ from app.models.customers import (
 )
 from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination
-from app.models.tickets import TicketStatusData
+from app.models.tickets import TicketStatusData, TicketTypeData
 from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
@@ -27,6 +27,8 @@ from app.modules.generals import (
     GenerateReferralCode,
     GetCurrentDateTime,
 )
+from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
+from app.modules.telegram_message import SendTelegramTicketOpenMessage
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
@@ -183,9 +185,9 @@ async def get_customers(
         }
     )
 
-    customer_maps_data, _ = await GetManyData(
+    customer_maps_data = await GetAggregateData(
         db.customers,
-        [],
+        [{"$match": query}],
         {"_id": 0, "lat": "$location.latitude", "lng": "$location.longitude"},
     )
     if is_maps_only:
@@ -207,6 +209,7 @@ async def get_customers(
 
 @router.get("/stats")
 async def get_customer_stats(
+    referral: str = None,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -214,7 +217,12 @@ async def get_customer_stats(
         raise HTTPException(
             status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
         )
+
+    query = {}
+    if referral:
+        query["referral"] = referral
     pipeline = [
+        {"$match": query},
         {
             "$group": {
                 "_id": None,
@@ -585,6 +593,7 @@ async def register_customer(
         ticket_data = {
             "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
             "status": TicketStatusData.PENDING,
+            "type": TicketTypeData.PSB.value,
             "id_reporter": insert_user_result.inserted_id,
             "id_assignee": None,
             "title": "Pemasangan Baru",
@@ -592,7 +601,9 @@ async def register_customer(
             "created_at": GetCurrentDateTime(),
             "created_by": insert_user_result.inserted_id,
         }
-        await CreateOneData(db.tickets, ticket_data)
+        result = await CreateOneData(db.tickets, ticket_data)
+        await SendWhatsappTicketOpenMessage(db, str(result.inserted_id))
+        await SendTelegramTicketOpenMessage(db, str(result.inserted_id))
         notification_data = {
             "title": "Pemasangan Baru",
             "description": "Instalasi jaringan baru untuk Pelanggan",

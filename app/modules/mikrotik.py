@@ -1,10 +1,28 @@
 from bson import ObjectId
 from fastapi.responses import JSONResponse
-from app.modules.generals import AddURLHTTPProtocol
-from app.modules.crud_operations import GetOneData
+from app.modules.generals import AddURLHTTPProtocol, GetCurrentDateTime
+from app.modules.crud_operations import CreateOneData, GetAggregateData, GetOneData
+from app.models.notifications import NotificationTypeData
+from app.models.users import UserRole
 from urllib.parse import urljoin
 import requests
 from requests.auth import HTTPBasicAuth
+
+
+async def CreateMikrotikErrorNotification(db, description: str):
+    notification_data = {
+        "title": "Mikrotik Message Error",
+        "description": description,
+        "type": NotificationTypeData.SYSTEM_ERROR.value,
+        "is_read": 0,
+        "created_at": GetCurrentDateTime(),
+    }
+    admin_user = await GetAggregateData(
+        db.users, [{"$match": {"role": UserRole.ADMIN.value}}]
+    )
+    for user in admin_user:
+        notification_data["id_user"] = ObjectId(user["_id"])
+        await CreateOneData(db.notifications, notification_data)
 
 
 def DeleteMikrotikInterface(host, username, password, pppoe_username):
@@ -93,7 +111,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
         if disabled:
             DeleteMikrotikInterface(host, username, password, pppoe_username)
     except Exception as e:
-        print(str(e))
+        await CreateMikrotikErrorNotification(db, str(e))
         is_success = False
 
     return JSONResponse(content=is_success)
@@ -129,7 +147,8 @@ async def DeleteMikrotikPPPSecret(db, customer_data):
 
             DeleteMikrotikInterface(host, username, password, pppoe_username)
         return True
-    except Exception:
+    except Exception as e:
+        await CreateMikrotikErrorNotification(db, str(e))
         return False
 
 
@@ -167,7 +186,7 @@ async def UpdateMikrotikPPPSecretByID(db, router, id_secret, payload):
         if payload.get("disabled") and payload.get("name"):
             DeleteMikrotikInterface(host, username, password, payload["name"])
     except Exception as e:
-        print(str(e))
+        await CreateMikrotikErrorNotification(db, str(e))
         is_success = False
 
     return JSONResponse(content=is_success)
@@ -195,7 +214,8 @@ async def DeleteMikrotikPPPSecretByID(db, router, id_secret: str, secret_name: s
             is_success = False
 
         DeleteMikrotikInterface(host, username, password, secret_name)
-    except Exception:
+    except Exception as e:
+        await CreateMikrotikErrorNotification(db, str(e))
         is_success = False
 
     return JSONResponse(content=is_success)
@@ -221,7 +241,8 @@ async def DeleteMikrotikPPPProfileByID(db, router, id_profile: str):
         )
         if response.status_code != 200:
             is_success = False
-    except Exception:
+    except Exception as e:
+        await CreateMikrotikErrorNotification(db, str(e))
         is_success = False
 
     return JSONResponse(content=is_success)
