@@ -54,7 +54,7 @@ async def get_interface_data(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         if response.status_code == 200:
             interface_data = response.json()
     except requests.exceptions.RequestException as e:
@@ -84,7 +84,7 @@ async def get_profile_data(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         if response.status_code == 200:
             profile_data = response.json()
     except requests.exceptions.RequestException as e:
@@ -133,7 +133,7 @@ async def get_secret_data(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         if response.status_code == 200:
             secret_data = response.json()
     except requests.exceptions.RequestException as e:
@@ -203,7 +203,7 @@ async def get_system_resource_data(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         if response.status_code == 200:
             system_resource_data = response.json()
     except requests.exceptions.RequestException as e:
@@ -236,12 +236,12 @@ async def get_user_stats_data(
     password = exist_router.get("password", "")
     try:
         ppp_response = requests.get(
-            ppp_url, auth=HTTPBasicAuth(username, password), timeout=10
+            ppp_url, auth=HTTPBasicAuth(username, password), timeout=60
         )
         if ppp_response.status_code == 200:
             ppp = ppp_response.json()
         secret_response = requests.get(
-            secret_url, auth=HTTPBasicAuth(username, password), timeout=10
+            secret_url, auth=HTTPBasicAuth(username, password), timeout=60
         )
         if secret_response.status_code == 200:
             secret = secret_response.json()
@@ -277,7 +277,7 @@ async def get_log_data(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         if response.status_code == 200:
             log_data = response.json()
     except requests.exceptions.RequestException as e:
@@ -310,7 +310,7 @@ async def reboot_mikrotik(
             url,
             auth=HTTPBasicAuth(username, password),
             verify=False,
-            timeout=10,
+            timeout=60,
         )
     except requests.exceptions.RequestException as e:
         print(e)

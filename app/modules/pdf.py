@@ -78,7 +78,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        f'Periode {DateIDFormatter(data.get("due_date",None))}',
+        f"Periode {DateIDFormatter(data.get('due_date', None))}",
         border=False,
         ln=True,
         align="R",
@@ -142,7 +142,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         7,
-        f'0{data.get("customer","-").get("phone_number","-")}',
+        f"0{data.get('customer', '-').get('phone_number', '-')}",
         border=False,
         ln=True,
         align="L",
@@ -187,7 +187,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
         pdf.cell(
             0,
             7,
-            f'Rp{ThousandSeparator(item.get("price",0).get("regular",0))}',
+            f"Rp{ThousandSeparator(item.get('price', 0).get('regular', 0))}",
             border=False,
             ln=True,
             align="R",
@@ -205,11 +205,21 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
         ln=False,
         align="R",
     )
+    if "paid_leave_amount" in data:
+        pdf.ln(7)
+        pdf.cell(
+            0,
+            7,
+            f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_amount', 0))}",
+            border=False,
+            ln=False,
+            align="R",
+        )
     pdf.ln(7)
     pdf.cell(
         0,
         7,
-        f'PPN: Rp{ThousandSeparator(data.get("ppn"))}',
+        f"PPN: Rp{ThousandSeparator(data.get('ppn'))}",
         border=False,
         ln=False,
         align="R",
@@ -218,7 +228,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         7,
-        f'Kode Unik: {str(data.get("unique_code",0))}',
+        f"Kode Unik: {str(data.get('unique_code', 0))}",
         border=False,
         ln=False,
         align="R",
@@ -227,7 +237,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         7,
-        f'Total Tagihan: Rp{ThousandSeparator(data.get("amount"))}',
+        f"Total Tagihan: Rp{ThousandSeparator(data.get('amount'))}",
         border=False,
         ln=False,
         align="R",
@@ -243,7 +253,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         7,
-        f'*Mohon melakukan pembayaran dengan nominal tepat Rp{ThousandSeparator(data.get("amount"))} sesuai Total Tagihan*',
+        f"*Mohon melakukan pembayaran dengan nominal tepat Rp{ThousandSeparator(data.get('amount'))} sesuai Total Tagihan*",
         border=False,
         ln=False,
         align="L",
@@ -306,19 +316,19 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        f'Nomor Layanan     : {str(data.get("service_number","-"))}',
+        f"Nomor Layanan     : {str(data.get('service_number', '-'))}",
         ln=True,
         align="L",
     )
     pdf.set_x(65)
     pdf.cell(
-        0, 6, f'Nama                     : {data.get("name","-")}', ln=True, align="L"
+        0, 6, f"Nama                     : {data.get('name', '-')}", ln=True, align="L"
     )
     pdf.set_x(65)
     pdf.cell(
         0,
         6,
-        f'Status Tagihan      : {paymentStatusFormatter(data.get("status","PAID"))}',
+        f"Status Tagihan      : {paymentStatusFormatter(data.get('status', 'PAID'))}",
         ln=True,
         align="L",
     )
@@ -326,7 +336,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        f'Jatuh Tempo         : {DateIDFormatter(data.get("due_date",None))}',
+        f"Jatuh Tempo         : {DateIDFormatter(data.get('due_date', None))}",
         ln=True,
         align="L",
     )
@@ -353,7 +363,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         pdf.cell(
             30,
             6,
-            f'Rp{ThousandSeparator(item.get("price",0).get("regular",0))}',
+            f"Rp{ThousandSeparator(item.get('price', 0).get('regular', 0))}",
             border=False,
             ln=True,
             align="R",
@@ -364,18 +374,26 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         data.get("add_on_package_amount", 0)
     )
     pdf.cell(0, 6, f"Sub Total : Rp{ThousandSeparator(subtotal)}", ln=True, align="C")
-    pdf.cell(0, 6, f'PPN : Rp{ThousandSeparator(data.get("ppn"))}', ln=True, align="C")
+    if "paid_leave_amount" in data:
+        pdf.cell(
+            0,
+            6,
+            f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_amount', 0))}",
+            ln=True,
+            align="C",
+        )
+    pdf.cell(0, 6, f"PPN : Rp{ThousandSeparator(data.get('ppn'))}", ln=True, align="C")
     pdf.cell(
         0,
         6,
-        f'Kode Unik : {ThousandSeparator(data.get("unique_code"))}',
+        f"Kode Unik : {ThousandSeparator(data.get('unique_code'))}",
         ln=True,
         align="C",
     )
     pdf.cell(
         0,
         6,
-        f'Total Tagihan : Rp{ThousandSeparator(data.get("amount"))}',
+        f"Total Tagihan : Rp{ThousandSeparator(data.get('amount'))}",
         ln=True,
         align="C",
     )

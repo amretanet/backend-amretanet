@@ -230,7 +230,7 @@ async def get_router_profile_options(
     username = exist_router.get("username", "")
     password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
 
         if response.status_code == 200:
             temp_profile = response.json()

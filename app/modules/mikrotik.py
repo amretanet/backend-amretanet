@@ -28,13 +28,13 @@ async def CreateMikrotikErrorNotification(db, description: str):
 def DeleteMikrotikInterface(host, username, password, pppoe_username):
     active_ppp_url = urljoin(host, f"/rest/ppp/active?name={pppoe_username}")
     response = requests.get(
-        active_ppp_url, auth=HTTPBasicAuth(username, password), timeout=10
+        active_ppp_url, auth=HTTPBasicAuth(username, password), timeout=60
     )
     result = response.json()
     if len(result) > 0:
         ppp_id = result[0].get(".id", None)
         delete_url = urljoin(host, f"/rest/ppp/active/{ppp_id}")
-        requests.delete(delete_url, auth=HTTPBasicAuth(username, password), timeout=10)
+        requests.delete(delete_url, auth=HTTPBasicAuth(username, password), timeout=60)
 
 
 async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
@@ -56,7 +56,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
         password = exist_router.get("password", "")
 
         # get specified secret
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         result = response.json()
         secret_id = None
         if len(result) > 0:
@@ -77,7 +77,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
                 f"{url}/{secret_id}",
                 json=data,
                 auth=HTTPBasicAuth(username, password),
-                timeout=10,
+                timeout=60,
             )
             if response.status_code != 200:
                 is_success = False
@@ -102,7 +102,7 @@ async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):
                 url,
                 json=secret_data,
                 auth=HTTPBasicAuth(username, password),
-                timeout=10,
+                timeout=60,
             )
             result = response.json()
             if response.status_code != 200:
@@ -134,13 +134,13 @@ async def DeleteMikrotikPPPSecret(db, customer_data):
         password = exist_router.get("password", "")
 
         # get specified secret
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=10)
+        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
         result = response.json()
         if len(result) > 0:
             secret_id = result[0].get(".id", None)
             url = urljoin(host, "/rest/ppp/secret")
             response = requests.delete(
-                f"{url}/{secret_id}", auth=HTTPBasicAuth(username, password), timeout=10
+                f"{url}/{secret_id}", auth=HTTPBasicAuth(username, password), timeout=60
             )
             if response.status_code != 200:
                 return False
@@ -178,7 +178,7 @@ async def UpdateMikrotikPPPSecretByID(db, router, id_secret, payload):
         host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
         url = urljoin(host, f"/rest/ppp/secret/{id_secret}")
         response = requests.patch(
-            url, json=data, auth=HTTPBasicAuth(username, password), timeout=10
+            url, json=data, auth=HTTPBasicAuth(username, password), timeout=60
         )
         if response.status_code != 200:
             is_success = False
@@ -208,7 +208,7 @@ async def DeleteMikrotikPPPSecretByID(db, router, id_secret: str, secret_name: s
         # get specified secret
         url = urljoin(host, f"/rest/ppp/secret/{id_secret}")
         response = requests.delete(
-            url, auth=HTTPBasicAuth(username, password), timeout=10
+            url, auth=HTTPBasicAuth(username, password), timeout=60
         )
         if response.status_code != 200:
             is_success = False
@@ -237,7 +237,7 @@ async def DeleteMikrotikPPPProfileByID(db, router, id_profile: str):
         # get specified profile
         url = urljoin(host, f"/rest/ppp/profile/{id_profile}")
         response = requests.delete(
-            url, auth=HTTPBasicAuth(username, password), timeout=10
+            url, auth=HTTPBasicAuth(username, password), timeout=60
         )
         if response.status_code != 200:
             is_success = False

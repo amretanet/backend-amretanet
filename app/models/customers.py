@@ -26,7 +26,7 @@ class CustomerStatusData(int, Enum):
     PENDING = 2
     FREE = 3
     ISOLIR = 4
-    PAID = 5
+    PAID_LEAVE = 5
 
 
 class CustomerBillingTypeData(str, Enum):
@@ -49,7 +49,9 @@ class CustomerLocationData(BaseModel):
 
 
 class CustomerInsertData(BaseModel):
+    service_number: int
     name: str
+    status: CustomerStatusData
     id_card: CustomerIDCardData
     gender: GenderData
     email: str
@@ -59,7 +61,9 @@ class CustomerInsertData(BaseModel):
     billing_type: CustomerBillingTypeData
     ppn: int
     due_date: str
-    referral: Optional[int] = 0
+    referral: Optional[str] = None
+    pppoe_username: str
+    pppoe_password: str
     id_router: str
     id_package: str
     id_add_on_package: Optional[list[str]] = []
@@ -69,7 +73,9 @@ class CustomerInsertData(BaseModel):
 
 
 class CustomerUpdateData(BaseModel):
+    service_number: int
     name: str
+    status: CustomerStatusData
     id_card: CustomerIDCardData
     gender: GenderData
     email: str
@@ -79,7 +85,7 @@ class CustomerUpdateData(BaseModel):
     billing_type: CustomerBillingTypeData
     ppn: int
     due_date: str
-    referral: Optional[int] = 0
+    referral: Optional[str] = None
     pppoe_username: str
     pppoe_password: str
     id_router: str

@@ -48,6 +48,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
+DEFAULT_SERVICE_NUMBER = 19000000
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -210,6 +211,33 @@ async def get_customers(
     )
 
 
+@router.get("/next-service-number")
+async def get_next_service_number(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    service_number = DEFAULT_SERVICE_NUMBER
+    lates_service_number = await GetOneData(
+        db.customers,
+        {"service_number": {"$exists": True}},
+        sort_by="service_number",
+        sort_direction=-1,
+    )
+    if lates_service_number:
+        service_number = int(lates_service_number["service_number"]) + 1
+
+    pppoe_username = str(service_number)
+    pppoe_password = GenerateRandomString(str(service_number))
+
+    return JSONResponse(
+        content={
+            "service_number": service_number,
+            "pppoe_username": pppoe_username,
+            "pppoe_password": pppoe_password,
+        }
+    )
+
+
 @router.get("/stats")
 async def get_customer_stats(
     referral: str = None,
@@ -262,9 +290,13 @@ async def get_customer_stats(
                         "$cond": [{"$eq": ["$status", CustomerStatusData.ISOLIR]}, 1, 0]
                     }
                 },
-                "paid": {
+                "paid_leave": {
                     "$sum": {
-                        "$cond": [{"$eq": ["$status", CustomerStatusData.PAID]}, 1, 0]
+                        "$cond": [
+                            {"$eq": ["$status", CustomerStatusData.PAID_LEAVE]},
+                            1,
+                            0,
+                        ]
                     }
                 },
                 "count": {"$sum": 1},
@@ -277,7 +309,7 @@ async def get_customer_stats(
                 "active": 1,
                 "free": 1,
                 "isolir": 1,
-                "paid": 1,
+                "paid_leave": 1,
                 "pending": 1,
                 "count": 1,
             }
@@ -523,7 +555,7 @@ async def register_customer(
 ):
     try:
         payload = data.dict(exclude_unset=True)
-        payload["service_number"] = 2900000
+        payload["service_number"] = DEFAULT_SERVICE_NUMBER
         lates_service_number = await GetOneData(
             db.customers,
             {"service_number": {"$exists": True}},
@@ -644,18 +676,14 @@ async def create_customer(
         )
     try:
         payload = data.dict(exclude_unset=True)
-        payload["service_number"] = 1900000
-        lates_service_number = await GetOneData(
-            db.customers,
-            {"service_number": {"$exists": True}},
-            sort_by="service_number",
-            sort_direction=-1,
+        # check exist service number
+        exist_service_number = await GetOneData(
+            db.customers, {"service_number": payload["service_number"]}
         )
-        if lates_service_number:
-            payload["service_number"] = int(lates_service_number["service_number"]) + 1
-
-        payload["pppoe_username"] = str(payload["service_number"])
-        payload["pppoe_password"] = GenerateRandomString(str(payload["service_number"]))
+        if exist_service_number:
+            raise HTTPException(
+                status_code=400, detail={"message": "Nomor layanan Telah Digunakan!"}
+            )
 
         # check exist id card number
         exist_id_card_number = await GetOneData(
@@ -681,13 +709,16 @@ async def create_customer(
             "email": payload["email"],
             "password": pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD),
             "phone_number": payload["phone_number"],
-            "status": 1,
+            "status": 0,
             "gender": payload["gender"],
             "referral": GenerateReferralCode(payload["email"]),
             "saldo": 0,
             "role": 99,
             "address": payload["location"]["address"],
         }
+        if payload["status"] == CustomerStatusData.ACTIVE:
+            user_data["status"] = 1
+
         insert_user_result = await CreateOneData(db.users, user_data)
         if not insert_user_result.inserted_id:
             raise HTTPException(
@@ -705,7 +736,13 @@ async def create_customer(
             )
 
         # create id secret mikrotik
-        is_secret_created = await ActivateMikrotikPPPSecret(db, payload)
+        disabled = (
+            False
+            if payload["status"] == CustomerStatusData.ACTIVE.value
+            or payload["status"] == CustomerStatusData.FREE.value
+            else True
+        )
+        is_secret_created = await ActivateMikrotikPPPSecret(db, payload, disabled)
         if not is_secret_created:
             await DeleteOneData(db.users, {"_id": insert_user_result.inserted_id})
             raise HTTPException(
@@ -722,7 +759,6 @@ async def create_customer(
         payload["id_package"] = ObjectId(payload["id_package"])
         payload["id_coverage_area"] = ObjectId(payload["id_coverage_area"])
         payload["id_odp"] = ObjectId(payload["id_odp"])
-        payload["status"] = 1
         payload["registered_by"] = current_user.name
         payload["registered_at"] = GetCurrentDateTime()
         insert_customer_result = await CreateOneData(db.customers, payload)
@@ -762,6 +798,15 @@ async def update_customer(
                 detail={"message": NOT_FOUND_MESSAGE},
             )
 
+        # check exist service number
+        exist_service_number = await GetOneData(
+            db.customers, {"service_number": payload["service_number"]}
+        )
+        if exist_service_number:
+            raise HTTPException(
+                status_code=400, detail={"message": "Nomor layanan Telah Digunakan!"}
+            )
+
         # check exist id card number
         exist_id_card_number = await GetOneData(
             db.customers,
@@ -787,7 +832,13 @@ async def update_customer(
             )
 
         # update mikrotik access
-        await ActivateMikrotikPPPSecret(db, payload)
+        disabled = (
+            False
+            if payload["status"] == CustomerStatusData.ACTIVE
+            or payload["status"] == CustomerStatusData.FREE
+            else True
+        )
+        await ActivateMikrotikPPPSecret(db, payload, disabled)
 
         # formatting payload
         if "id_add_on_package" in payload:
@@ -820,6 +871,11 @@ async def update_customer(
             update_user.update({"gender": payload["gender"]})
         if "location" in payload and "address" in payload["location"]:
             update_user.update({"address": payload["location"]["address"]})
+        if (
+            payload["status"] == CustomerStatusData.ACTIVE
+            or payload["status"] == CustomerStatusData.NONACTIVE
+        ):
+            update_user.update({"status": payload["status"]})
 
         await UpdateOneData(
             db.users, {"_id": ObjectId(exist_data["id_user"])}, {"$set": update_user}

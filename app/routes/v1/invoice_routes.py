@@ -124,7 +124,12 @@ async def generate_invoice(
 ):
     pipeline = []
     query = {
-        "status": CustomerStatusData.ACTIVE.value,
+        "status": {
+            "$in": [
+                CustomerStatusData.ACTIVE.value,
+                CustomerStatusData.PAID_LEAVE.value,
+            ]
+        },
         "due_date": {"$in": GetDueDateRange(10)},
     }
     if id_customer:
@@ -226,6 +231,7 @@ async def generate_invoice(
                 "add_on_packages": 1,
                 "add_on_package_amount": 1,
                 "amount": 1,
+                "status": 1,
             }
         }
     )
@@ -256,8 +262,13 @@ async def generate_invoice(
 
         current_unique_code = unique_code + 1
         ppn = 0
+        paid_leave_amount: 0
         if customer.get("ppn", 0):
             ppn = customer["amount"] * (PPN / 100)
+
+        if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
+            customer["amount"] = customer["amount"] / 2
+            paid_leave_amount = customer["amount"]
 
         final_amount = customer["amount"] + ppn + current_unique_code
         invoice_data = {
@@ -280,6 +291,8 @@ async def generate_invoice(
             "amount": final_amount,
             "created_at": GetCurrentDateTime(),
         }
+        if paid_leave_amount:
+            invoice_data["paid_leave_amount"] = paid_leave_amount
 
         invoice_result = await CreateOneData(db.invoices, invoice_data)
         if not invoice_result.inserted_id:

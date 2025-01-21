@@ -270,6 +270,8 @@ async def auto_confirm_moota_invoice(
                             "status": "PAID",
                             "payment.method": PaymentMethodData.TRANSFER.value,
                             "payment.paid_at": GetCurrentDateTime(),
+                            "payment.confirmed_at": GetCurrentDateTime(),
+                            "payment.confirmed_by": "moota@gmail.com",
                         }
                     },
                 )

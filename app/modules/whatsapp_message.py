@@ -59,7 +59,7 @@ async def SendWhatsappMessage(destination_number, message):
         "message": message,
     }
     whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-    response = requests.post(whatsapp_api_url, json=params, timeout=10)
+    response = requests.post(whatsapp_api_url, json=params)
     return response
 
 
@@ -100,7 +100,7 @@ async def SendWhatsappCustomerRegisterMessage(db, id_customer):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -134,7 +134,7 @@ async def SendWhatsappCustomerActivatedMessage(db, id_customer):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -167,7 +167,7 @@ async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
             "[tgl_due_date]": customer_data.get("due_date", ""),
             "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
             "[tahun_tagihan]": invoice_data.get("year"),
-            "[link]": f"{FRONTEND_DOMAIN}/service/payment",
+            "[link]": f"{FRONTEND_DOMAIN}/customers/invoice",
             "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
         }
 
@@ -184,7 +184,7 @@ async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -211,7 +211,7 @@ async def SendWhatsappPaymentReminderMessage(db, id_invoice):
         fields_to_replace = {
             "[nama_pelanggan]": customer_data.get("name", "-"),
             "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
-            "[link]": f"{FRONTEND_DOMAIN}/service/payment",
+            "[link]": f"{FRONTEND_DOMAIN}/customers/invoice",
             "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
         }
 
@@ -228,7 +228,7 @@ async def SendWhatsappPaymentReminderMessage(db, id_invoice):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -256,7 +256,7 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
             "[judul]": f"*{whatsapp_message.get('advance', '').get('header', '')}*",
             "[nama_pelanggan]": customer_data.get("name", "-"),
             "[no_servis]": customer_data.get("service_number", "-"),
-            "[link]": f"{FRONTEND_DOMAIN}/service/payment",
+            "[link]": f"{FRONTEND_DOMAIN}/customers/invoice",
         }
 
         for key, value in fields_to_replace.items():
@@ -272,7 +272,7 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -314,7 +314,7 @@ async def SendWhatsappIsolirMessage(db, id_invoice):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -366,7 +366,7 @@ async def SendWhatsappPaymentSuccessMessage(db, id_invoice):
             "message": message,
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=10)
+        requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -449,7 +449,7 @@ async def SendWhatsappTicketOpenMessage(
                 "message": v_message,
             }
             whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-            requests.post(whatsapp_api_url, json=params, timeout=10)
+            requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         print(e)
         await CreateWhatsappErrorNotification(db, str(e))
@@ -523,6 +523,6 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
                 "message": v_message,
             }
             whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
-            requests.post(whatsapp_api_url, json=params, timeout=10)
+            requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
