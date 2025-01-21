@@ -11,3 +11,4 @@ python-multipart
 bcrypt
 requests
 fpdf
+librouteros
