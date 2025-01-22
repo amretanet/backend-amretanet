@@ -29,3 +29,4 @@ class UploadImageType(str, Enum):
     id_card_attachment = "id_card_attachment"
     house_attachment = "house_attachment"
     ticket_attachment = "ticket_attachment"
+    utils = "utils"

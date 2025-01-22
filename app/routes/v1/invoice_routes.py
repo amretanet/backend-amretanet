@@ -262,7 +262,7 @@ async def generate_invoice(
 
         current_unique_code = unique_code + 1
         ppn = 0
-        paid_leave_amount: 0
+        paid_leave_amount = 0
         if customer.get("ppn", 0):
             ppn = customer["amount"] * (PPN / 100)
 
