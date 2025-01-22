@@ -43,7 +43,7 @@ async def CreateWhatsappErrorNotification(db, description: str):
     )
     for user in admin_user:
         notification_data["id_user"] = ObjectId(user["_id"])
-        await CreateOneData(db.notifications, notification_data)
+        await CreateOneData(db.notifications, notification_data.copy())
 
 
 def WhatsappMessageFormatter(title: str, body: str):

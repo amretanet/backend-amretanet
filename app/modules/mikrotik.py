@@ -55,7 +55,7 @@ async def CreateMikrotikErrorNotification(db, description: str):
     )
     for user in admin_user:
         notification_data["id_user"] = ObjectId(user["_id"])
-        await CreateOneData(db.notifications, notification_data)
+        await CreateOneData(db.notifications, notification_data.copy())
 
 
 async def ActivateMikrotikPPPSecret(db, customer_data, disabled: bool = False):

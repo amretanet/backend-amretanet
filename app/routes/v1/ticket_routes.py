@@ -343,6 +343,7 @@ async def close_ticket(
     if payload.get("id_odp"):
         payload["id_odp"] = ObjectId(payload["id_odp"])
         customer_update_data["id_odp"] = payload["id_odp"]
+
     result = await UpdateOneData(db.tickets, {"_id": ObjectId(id)}, {"$set": payload})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
@@ -364,14 +365,20 @@ async def close_ticket(
         "is_read": 0,
         "created_at": GetCurrentDateTime(),
     }
+    id_creator = exist_data.get("created_by", None)
+    id_reporter = exist_data.get("id_reporter", None)
+    if id_creator != id_reporter:
+        notification_data["id_user"] = ObjectId(id_creator)
+        await CreateOneData(db.notifications, notification_data.copy())
 
     admin_user = await GetAggregateData(
         db.users, [{"$match": {"role": UserRole.ADMIN}}]
     )
     if len(admin_user) > 0:
         for user in admin_user:
-            notification_data["id_user"] = ObjectId(user["_id"])
-            await CreateOneData(db.notifications, notification_data)
+            if user["_id"] != id_creator:
+                notification_data["id_user"] = ObjectId(user["_id"])
+                await CreateOneData(db.notifications, notification_data.copy())
 
     await SendWhatsappTicketClosedMessage(db, id)
     await SendTelegramTicketClosedMessage(db, id)

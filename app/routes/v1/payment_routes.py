@@ -349,7 +349,7 @@ async def request_confirm_payment(
         if len(admin_user) > 0:
             for user in admin_user:
                 notification_data["id_user"] = ObjectId(user["_id"])
-                await CreateOneData(db.notifications, notification_data)
+                await CreateOneData(db.notifications, notification_data.copy())
 
         return JSONResponse(
             content={"message": "Permintaan Konfirmasi Pembayaran Telah Dikirimkan"}
