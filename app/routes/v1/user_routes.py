@@ -198,6 +198,8 @@ async def delete_user(
     if not result.deleted_count:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    await DeleteOneData(db.customers, {"id_user": ObjectId(id)})
+
     return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
 
 
