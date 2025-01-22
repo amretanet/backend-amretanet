@@ -131,7 +131,9 @@ async def SendTelegramTicketOpenMessage(db, id_ticket: str):
 
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
-            "message_thread_id": TELEGRAM_MAINTENANCE_THREAD_ID,
+            "message_thread_id": TELEGRAM_INSTALLATION_THREAD_ID
+            if ticket_data.get("type") == TicketTypeData.PSB.value
+            else TELEGRAM_MAINTENANCE_THREAD_ID,
             "text": v_message,
             "parse_mode": "Markdown",
             "reply_markup": {"inline_keyboard": [SHORTCUT_BUTTON]},
@@ -249,7 +251,9 @@ async def SendTelegramTicketClosedMessage(db, id_ticket: str):
             v_message += f"*Pesan Konfirmasi*: {ticket_data.get('confirm_message', '')}"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
-            "message_thread_id": TELEGRAM_MAINTENANCE_THREAD_ID,
+            "message_thread_id": TELEGRAM_INSTALLATION_THREAD_ID
+            if ticket_data.get("type") == TicketTypeData.PSB.value
+            else TELEGRAM_MAINTENANCE_THREAD_ID,
             "text": v_message,
             "parse_mode": "Markdown",
             "reply_markup": {"inline_keyboard": [SHORTCUT_BUTTON]},
