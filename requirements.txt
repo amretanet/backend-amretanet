@@ -4,11 +4,12 @@ python-dotenv==1.0.1
 motor==3.6.0
 python-dateutil==2.9.0.post0
 pytz==2024.2
-python-jose==3.3.0
-passlib==10.4.0
+python-jose
+passlib
 cryptography==43.0.3
 python-multipart==0.0.17
 bcrypt==4.2.0
 requests==2.32.3
 fpdf==1.7.2
 librouteros==3.3.1
+pillow
