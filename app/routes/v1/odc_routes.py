@@ -7,6 +7,7 @@ from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -51,15 +52,7 @@ async def get_odc(
 
     pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
 
-    odc_maps_data, _ = await GetManyData(
-        db.odc,
-        [],
-        {
-            "_id": 0,
-            "lat": "$location.latitude",
-            "lng": "$location.longitude",
-        },
-    )
+    odc_maps_data = await GetAggregateData(db.odc, pipeline, ODCProjections)
     if is_maps_only:
         return JSONResponse(content={"odc_maps_data": odc_maps_data})
 

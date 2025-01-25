@@ -7,6 +7,7 @@ from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -89,15 +90,7 @@ async def get_odp(
         },
     ]
 
-    odp_maps_data, _ = await GetManyData(
-        db.odp,
-        [],
-        {
-            "_id": 0,
-            "lat": "$location.latitude",
-            "lng": "$location.longitude",
-        },
-    )
+    odp_maps_data = await GetAggregateData(db.odp, pipeline, ODPProjections)
     if is_maps_only:
         return JSONResponse(content={"odp_maps_data": odp_maps_data})
 

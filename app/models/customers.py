@@ -10,12 +10,16 @@ CustomerProjections = {
     "location": 1,
     "created_at": 1,
     "odp_name": 1,
+    "email": 1,
     "phone_number": 1,
     "status": 1,
     "ppn": 1,
     "due_date": 1,
     "billing": 1,
     "referral": 1,
+    "package": 1,
+    "add_on_packages": 1,
+    "registered_at": 1,
 }
 
 

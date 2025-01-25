@@ -190,9 +190,7 @@ async def get_customers(
     )
 
     customer_maps_data = await GetAggregateData(
-        db.customers,
-        [{"$match": query}],
-        {"_id": 0, "lat": "$location.latitude", "lng": "$location.longitude"},
+        db.customers, pipeline, CustomerProjections
     )
     if is_maps_only:
         return JSONResponse(content={"customer_maps_data": customer_maps_data})

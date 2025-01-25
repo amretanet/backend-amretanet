@@ -7,6 +7,7 @@ from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
+    GetAggregateData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -35,13 +36,8 @@ async def get_coverage_areas(
     is_maps_only: bool = False,
     page: int = 1,
     items: int = 1,
-    current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.CUSTOMER:
-        raise HTTPException(
-            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
-        )
     query = {}
     if key:
         query["$or"] = [
@@ -51,10 +47,8 @@ async def get_coverage_areas(
 
     pipeline = [{"$match": query}, {"$sort": {"name": 1}}]
 
-    coverage_area_maps_data, _ = await GetManyData(
-        db.coverage_areas,
-        [],
-        {"_id": 0, "lat": "$address.latitude", "lng": "$address.longitude"},
+    coverage_area_maps_data = await GetAggregateData(
+        db.coverage_areas, pipeline, CoverageAreaProjections
     )
     if is_maps_only:
         return JSONResponse(
@@ -68,12 +62,6 @@ async def get_coverage_areas(
         {"page": page, "items": items},
     )
     pagination_info: Pagination = {"page": page, "items": items, "count": count}
-
-    coverage_area_maps_data, _ = await GetManyData(
-        db.coverage_areas,
-        [],
-        {"_id": 0, "lat": "$address.latitude", "lng": "$address.longitude"},
-    )
     return JSONResponse(
         content={
             "coverage_area_data": coverage_area_data,
