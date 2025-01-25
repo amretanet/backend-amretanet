@@ -198,6 +198,7 @@ async def get_router_options(
 
 @router.get("/package")
 async def get_package_options(
+    is_displayed: int = None,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     PackageOptionProjections = {
@@ -209,7 +210,12 @@ async def get_package_options(
         "router_profile": 1,
         "bandwidth": 1,
     }
-    package_options = await GetAggregateData(db.packages, [], PackageOptionProjections)
+    query = {}
+    if is_displayed is not None:
+        query["is_displayed"] = is_displayed
+    package_options = await GetAggregateData(
+        db.packages, [{"$match": query}], PackageOptionProjections
+    )
     return JSONResponse(content={"package_options": package_options})
 
 
