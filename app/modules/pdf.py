@@ -1,17 +1,23 @@
 from io import BytesIO
 from fpdf import FPDF
+from fpdf_table import PDFTable
 from PIL import Image
 import os
 from dotenv import load_dotenv
 from urllib.parse import urljoin
-from app.modules.generals import GetCurrentDateTime, ThousandSeparator, DateIDFormatter
+from app.modules.generals import (
+    GetCurrentDateTime,
+    NumberToWords,
+    ThousandSeparator,
+    DateIDFormatter,
+)
 
 load_dotenv()
 
 PROJECT_PATH = os.getenv("PROJECT_PATH")
 
 
-def paymentStatusFormatter(status: str):
+def PaymentStatusFormatter(status: str):
     if status == "PAID":
         return "SUDAH DIBAYAR"
     elif status == "PENDING":
@@ -29,7 +35,7 @@ def ConvertImage(input_path: str, output_path: str):
         img.save(output_path, format="PNG", interlace=False)
 
 
-def CreateInvoiceHeader(pdf: FPDF, show_line: bool = True):
+def CreatePDFHeader(pdf: FPDF, show_line: bool = True):
     logo_path = urljoin(PROJECT_PATH, "utils/short-logo.png")
     # convert logo
     try:
@@ -88,7 +94,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        paymentStatusFormatter(data.get("status", "PAID")),
+        PaymentStatusFormatter(data.get("status", "PAID")),
         border=False,
         ln=True,
         align="R",
@@ -328,7 +334,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
     pdf.cell(
         0,
         6,
-        f"Status Tagihan      : {paymentStatusFormatter(data.get('status', 'PAID'))}",
+        f"Status Tagihan      : {PaymentStatusFormatter(data.get('status', 'PAID'))}",
         ln=True,
         align="L",
     )
@@ -411,7 +417,7 @@ def CreateInvoicePDF(data: list) -> BytesIO:
         pdf.add_page()
 
         # create header
-        CreateInvoiceHeader(pdf)
+        CreatePDFHeader(pdf)
 
         # create body
         CreatePDFInvoiceBody(pdf, item)
@@ -430,13 +436,100 @@ def CreateInvoiceThermal(data: list):
     for item in data:
         pdf.add_page()
         # create header
-        CreateInvoiceHeader(pdf, False)
+        CreatePDFHeader(pdf, False)
         # create body
         CreateThermalInvoiceBody(pdf, item)
 
     # save to pdf
     pdf_bytes = BytesIO()
     pdf_output = pdf.output(dest="S").encode("latin1")
+    pdf_bytes.write(pdf_output)
+    pdf_bytes.seek(0)
+    return pdf_bytes
+
+
+def CreatePDFCashflowBody(
+    pdf: PDFTable, data, from_date: str, to_date: str, saldo_count: int
+):
+    # cashflow title
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "LAPORAN", border=False, ln=True, align="R")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(
+        0,
+        4,
+        f"Rekapitulasi {DateIDFormatter(str(from_date))} s/d {DateIDFormatter(str(to_date))}",
+        border=False,
+        ln=True,
+        align="R",
+    )
+
+    pdf.ln()
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_fill_color(200, 200, 200)
+
+    headers = ["Tanggal", "Jenis", "Kategori", "Deskripsi", "Kredit", "Debit", "Saldo"]
+    widths = [30, 20, 20, 60, 20, 20, 20]
+    aligns = ["C", "C", "C", "L", "L", "L", "L"]
+    pdf.table_header(headers, widths, aligns)
+    for item in data:
+        date = DateIDFormatter(item.get("date", ""), True)
+        type = "Pemasukan" if item.get("type") == "INCOMES" else "Pengeluaran"
+        credit = (
+            f"Rp{ThousandSeparator(item.get('credit', 0))}"
+            if item.get("credit")
+            else "-"
+        )
+        debit = (
+            f"Rp{ThousandSeparator(item.get('debit', 0))}" if item.get("debit") else "-"
+        )
+        saldo = (
+            f"Rp{ThousandSeparator(item.get('saldo', 0))}" if item.get("saldo") else "-"
+        )
+        row = [
+            date,
+            type,
+            item.get("category", ""),
+            item.get("description", "-"),
+            credit,
+            debit,
+            saldo,
+        ]
+        pdf.table_row(row, widths, aligns, option="responsive")
+
+    pdf.ln()
+    pdf.set_font("Arial", "B", 10)
+    total_text = f"Total: {ThousandSeparator(saldo_count)}"
+    pdf.cell(0, 7, total_text, border=False, ln=True, align="R")
+    pdf.set_font("Arial", "", 8)
+    number_to_words_text = f"({NumberToWords(saldo_count)})"
+    pdf.multi_cell(0, 7, number_to_words_text, border=False, align="R")
+    pdf.ln(10)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(
+        0,
+        4,
+        f"Dicetak Pada {DateIDFormatter(str(GetCurrentDateTime()))}",
+        border=False,
+        ln=True,
+        align="L",
+    )
+
+
+def CreateCashflowPDF(
+    data: list, from_date: str, to_date: str, saldo_count: int
+) -> BytesIO:
+    pdf = PDFTable()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # create header
+    CreatePDFHeader(pdf)
+
+    # create body
+    CreatePDFCashflowBody(pdf, data, from_date, to_date, saldo_count)
+    # save to pdf
+    pdf_bytes = BytesIO()
+    pdf_output = pdf.output(dest="S")
     pdf_bytes.write(pdf_output)
     pdf_bytes.seek(0)
     return pdf_bytes

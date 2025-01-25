@@ -22,6 +22,7 @@ from app.routes.v1 import (
     mikrotik_routes,
     notification_routes,
     change_submission_routes,
+    transaction_routes,
 )
 
 router = APIRouter()
@@ -43,7 +44,8 @@ router.include_router(payment_routes.router)
 router.include_router(package_routes.router)
 router.include_router(router_routes.router)
 router.include_router(salary_routes.router)
-router.include_router(user_routes.router)
+router.include_router(transaction_routes.router)
 router.include_router(ticket_routes.router)
+router.include_router(user_routes.router)
 router.include_router(util_routes.router)
 router.include_router(whatsapp_message_routes.router)

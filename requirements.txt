@@ -11,5 +11,6 @@ python-multipart==0.0.17
 bcrypt==4.2.0
 requests==2.32.3
 fpdf==1.7.2
+fpdf-table
 librouteros==3.3.1
 pillow

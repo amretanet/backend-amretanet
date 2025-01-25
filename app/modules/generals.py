@@ -10,6 +10,69 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def NumberToWords(number: int) -> str:
+    satuan = [
+        "",
+        "Satu",
+        "Dua",
+        "Tiga",
+        "Empat",
+        "Lima",
+        "Enam",
+        "Tujuh",
+        "Delapan",
+        "Sembilan",
+    ]
+    levels = ["", "Ribu", "Juta", "Milyar", "Triliun"]
+
+    if number == 0:
+        return "Nol"
+
+    result = ""
+    level = 0
+
+    while number > 0:
+        part = number % 1000
+
+        if part != 0:
+            part_str = ""
+            ratusan = part // 100
+            puluhan_dan_satuan = part % 100
+
+            if ratusan > 0:
+                part_str += "Seratus " if ratusan == 1 else f"{satuan[ratusan]} Ratus "
+
+            if puluhan_dan_satuan > 0:
+                if puluhan_dan_satuan < 10:
+                    part_str += f"{satuan[puluhan_dan_satuan]} "
+                elif puluhan_dan_satuan == 10:
+                    part_str += "Sepuluh "
+                elif puluhan_dan_satuan < 20:
+                    if puluhan_dan_satuan == 11:
+                        part_str += "Sebelas "
+                    else:
+                        part_str += f"{satuan[puluhan_dan_satuan % 10]} Belas "
+                else:
+                    puluhan = puluhan_dan_satuan // 10
+                    satuan_angka = puluhan_dan_satuan % 10
+
+                    part_str += f"{satuan[puluhan]} Puluh "
+                    if satuan_angka > 0:
+                        part_str += f"{satuan[satuan_angka]} "
+
+            if level == 1 and part == 1:
+                part_str = "Seribu "
+            else:
+                part_str += f"{levels[level]} "
+
+            result = part_str + result
+
+        level += 1
+        number //= 1000
+
+    return result.strip()
+
+
 def RemoveFilePath(file_path: str):
     parsed_url = urlparse(file_path)
     static_path = parsed_url.path
