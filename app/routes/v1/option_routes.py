@@ -9,19 +9,12 @@ from app.models.options import (
     SubdistrictOptionProjections,
     VillageOptionProjections,
 )
-from app.modules.generals import AddURLHTTPProtocol
 from app.models.users import UserData
 from app.routes.v1.auth_routes import GetCurrentUser
-from app.modules.crud_operations import (
-    GetAggregateData,
-    GetDataCount,
-    GetManyData,
-    GetOneData,
-)
+from app.modules.crud_operations import GetAggregateData, GetDataCount
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import requests
-from urllib.parse import urljoin
-from requests.auth import HTTPBasicAuth
+from app.modules.mikrotik import GetMikrotikRouterDataByName, MikrotikConnection
 
 router = APIRouter(prefix="/options", tags=["Options"])
 
@@ -227,27 +220,15 @@ async def get_router_profile_options(
 ):
     router_profile_options = []
 
-    exist_router = await GetOneData(db.router, {"name": name})
-    if not exist_router:
+    host, username, password, port = await GetMikrotikRouterDataByName(db, name)
+    if not host:
         return JSONResponse(content={"router_profile_options": router_profile_options})
-
-    host = AddURLHTTPProtocol(exist_router.get("ip_address", ""))
-    url = urljoin(host, "/rest/ppp/profile")
-    username = exist_router.get("username", "")
-    password = exist_router.get("password", "")
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(username, password), timeout=60)
-
-        if response.status_code == 200:
-            temp_profile = response.json()
-            router_profile_options = [
-                {"title": item.get("name", ""), "value": item.get("name", "")}
-                for item in temp_profile
-            ]
-        else:
-            router_profile_options = []
+        mikrotik = MikrotikConnection(host, username, password, port)
+        for row in mikrotik.path("/ppp/profile").select():
+            router_profile_options.append(row.get("name", ""))
     except requests.exceptions.RequestException as e:
-        router_profile_options = []
+        print(e)
 
     return JSONResponse(content={"router_profile_options": router_profile_options})
 

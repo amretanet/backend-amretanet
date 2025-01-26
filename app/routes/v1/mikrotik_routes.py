@@ -26,24 +26,6 @@ from librouteros.query import Key, Or
 router = APIRouter(prefix="/mikrotik", tags=["Mikrotik"])
 
 
-@router.get("/testing")
-async def testing(
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-):
-    router = "AMRETA-2021"
-    host, username, password, port = await GetMikrotikRouterDataByName(db, router)
-    if not host:
-        return JSONResponse(content={"message": SYSTEM_ERROR_MESSAGE})
-
-    mikrotik = MikrotikConnection(host, username, password, port)
-    user_data = []
-    name = Key("name")
-    for row in mikrotik.path("/ppp/secret").select().where(name == "1900000"):
-        user_data.append(row)
-
-    return user_data
-
-
 @router.get("/interface")
 async def get_interface_data(
     router: str,
