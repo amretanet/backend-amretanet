@@ -798,7 +798,11 @@ async def update_customer(
 
         # check exist service number
         exist_service_number = await GetOneData(
-            db.customers, {"service_number": payload["service_number"]}
+            db.customers,
+            {
+                "service_number": payload["service_number"],
+                "_id": {"$ne": ObjectId(id)},
+            },
         )
         if exist_service_number:
             raise HTTPException(

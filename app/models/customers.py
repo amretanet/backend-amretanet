@@ -47,6 +47,7 @@ class CustomerIDCardData(BaseModel):
 class CustomerLocationData(BaseModel):
     house_status: str
     house_owner: str
+    house_image_url: Optional[str] = None   
     address: str
     latitude: float
     longitude: float
