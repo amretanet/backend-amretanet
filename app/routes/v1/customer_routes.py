@@ -68,10 +68,6 @@ async def get_customers(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    if current_user.role == UserRole.CUSTOMER:
-        raise HTTPException(
-            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
-        )
     pipeline = []
     query = {}
     if key:
