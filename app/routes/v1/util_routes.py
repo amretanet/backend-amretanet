@@ -31,7 +31,8 @@ async def upload_file(
     file_name = type.value.lower().replace("_", "-")
     new_filename = f"{file_name}-{round(GetCurrentDateTime().timestamp())}{Path(file.filename).suffix}"
     file_path = STATIC_DIR / type.value.lower().replace("_", "-") / new_filename
-    base_url = f"{request.url.scheme}://{request.headers['host']}"
+    base_url = str(request.base_url).rstrip("/")
+
     try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("wb") as buffer:

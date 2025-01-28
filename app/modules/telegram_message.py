@@ -34,7 +34,7 @@ async def CreateTelegramErrorNotification(db, description: str):
         await CreateOneData(db.notifications, notification_data.copy())
 
 
-async def SendTelegramImage(image_url: list):
+async def SendTelegramImage(image_url: list, thread_id):
     media_list = []
     for url in image_url:
         media_list.append(
@@ -45,7 +45,7 @@ async def SendTelegramImage(image_url: list):
         )
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "message_thread_id": TELEGRAM_MAINTENANCE_THREAD_ID,
+        "message_thread_id": thread_id,
         "media": media_list,
         "caption": "Bukti Pengerjaan",
     }
@@ -261,7 +261,7 @@ async def SendTelegramTicketClosedMessage(db, id_ticket: str):
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         )
         requests.post(telegram_api_url, json=data)
-        await SendTelegramImage(IMAGE_EVIDENCE)
+        await SendTelegramImage(IMAGE_EVIDENCE, data["message_thread_id"])
     except Exception as e:
         await CreateTelegramErrorNotification(db, str(e))
 
@@ -293,6 +293,9 @@ async def SendTelegramPaymentMessage(db, id_invoice):
         telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?{urlencode(params)}"
         requests.get(telegram_api_url)
         if invoice_data.get("payment").get("method") in ["TRANSFER", "QRIS"]:
-            await SendTelegramImage([invoice_data.get("payment").get("image_url")])
+            await SendTelegramImage(
+                [invoice_data.get("payment").get("image_url")],
+                params["message_thread_id"],
+            )
     except Exception as e:
         await CreateTelegramErrorNotification(db, str(e))
