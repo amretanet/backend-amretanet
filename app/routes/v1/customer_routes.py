@@ -310,7 +310,13 @@ async def get_customer_stats(
         },
     ]
     customer_stats_data = await GetAggregateData(db.customers, pipeline)
-    return JSONResponse(content={"customer_stats_data": customer_stats_data[0]})
+    return JSONResponse(
+        content={
+            "customer_stats_data": customer_stats_data[0]
+            if len(customer_stats_data) > 0
+            else {}
+        }
+    )
 
 
 @router.get("/dashboard-info/{id}")

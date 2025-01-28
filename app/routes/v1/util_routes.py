@@ -19,11 +19,6 @@ STATIC_DIR = Path("assets")
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 
-async def get_all_data(v_db_collection, v_query: list = []):
-    result = await v_db_collection.aggregate(v_query).to_list(None)
-    return result
-
-
 router = APIRouter(prefix="/utility", tags=["Utility"])
 
 

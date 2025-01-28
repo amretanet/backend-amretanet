@@ -13,6 +13,7 @@ class TicketEpidenceData(BaseModel):
     house_image_url: Optional[str] = None
     customer_image_url: Optional[str] = None
     other_image_url: Optional[str] = None
+    pending_image_url: Optional[str] = None
 
 
 class TicketStatusData(str, Enum):
@@ -61,3 +62,8 @@ class TicketCloseData(BaseModel):
     evidence: TicketEpidenceData
     location: Location
     confirm_message: str
+
+
+class TicketPendingData(BaseModel):
+    confirm_message: str
+    evidence: TicketEpidenceData

@@ -25,6 +25,7 @@ from app.models.notifications import NotificationTypeData
 from app.models.tickets import (
     TicketCloseData,
     TicketInsertData,
+    TicketPendingData,
     TicketStatusData,
     TicketTypeData,
     TicketUpdateData,
@@ -52,6 +53,7 @@ async def get_tickets(
     status: TicketStatusData = None,
     id_reporter: str = None,
     id_assignee: str = None,
+    created_by: str = None,
     page: int = 1,
     items: int = 1,
     current_user: UserData = Depends(GetCurrentUser),
@@ -70,10 +72,55 @@ async def get_tickets(
         query["id_reporter"] = ObjectId(id_reporter)
     if id_assignee:
         query["id_assignee"] = ObjectId(id_assignee)
+    if created_by:
+        query["created_by"] = ObjectId(created_by)
 
     pipeline = [
         {"$match": query},
-        {"$sort": {"created_at": -1}},
+        {
+            "$addFields": {
+                "status_priority": {
+                    "$switch": {
+                        "branches": [
+                            {
+                                "case": {
+                                    "$eq": [
+                                        "$status",
+                                        TicketStatusData.ON_PROGRESS.value,
+                                    ]
+                                },
+                                "then": 1,
+                            },
+                            {
+                                "case": {
+                                    "$eq": ["$status", TicketStatusData.OPEN.value]
+                                },
+                                "then": 2,
+                            },
+                            {
+                                "case": {
+                                    "$eq": ["$status", TicketStatusData.PENDING.value]
+                                },
+                                "then": 3,
+                            },
+                            {
+                                "case": {
+                                    "$eq": ["$status", TicketStatusData.CLOSED.value]
+                                },
+                                "then": 4,
+                            },
+                        ],
+                        "default": 5,
+                    }
+                }
+            }
+        },
+        {
+            "$sort": {
+                "status_priority": 1,
+                "created_at": 1,
+            }
+        },
         {
             "$lookup": {
                 "from": "users",
@@ -116,17 +163,6 @@ async def get_tickets(
                     {"$project": {"name": 1}},
                 ],
                 "as": "odp",
-            }
-        },
-        {
-            "$lookup": {
-                "from": "users",
-                "let": {"idAssignee": "$id_assignee"},
-                "pipeline": [
-                    {"$match": {"$expr": {"$eq": ["$_id", "$$idAssignee"]}}},
-                    {"$project": {"name": 1}},
-                ],
-                "as": "assignee",
             }
         },
         {
@@ -181,10 +217,21 @@ async def get_tickets(
 
 @router.get("/stats")
 async def get_ticket_stats(
+    id_reporter: str = None,
+    id_assignee: str = None,
+    created_by: str = None,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    query = {}
+    if id_reporter:
+        query["id_reporter"] = ObjectId(id_reporter)
+    if id_assignee:
+        query["id_assignee"] = ObjectId(id_assignee)
+    if created_by:
+        query["created_by"] = ObjectId(created_by)
     pipeline = []
+    pipeline.append({"$match": query})
     pipeline.append(
         {
             "$group": {
@@ -243,6 +290,18 @@ async def create_ticket(
     notification_data = {}
     if "id_reporter" in payload and payload["id_reporter"]:
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
+        exist_reporter = await GetOneData(
+            db.tickets,
+            {
+                "id_reporter": payload["id_reporter"],
+                "status": {"$ne": TicketStatusData.CLOSED.value},
+            },
+        )
+        if exist_reporter:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Tiket Pada Pelanggan Tersebut Belum Selesai!"},
+            )
     if "id_assignee" in payload and payload["id_assignee"]:
         payload["id_assignee"] = ObjectId(payload["id_assignee"])
         notification_data = {
@@ -286,9 +345,24 @@ async def update_ticket(
 
     if "id_reporter" in payload and payload["id_reporter"]:
         payload["id_reporter"] = ObjectId(payload["id_reporter"])
+        exist_reporter = await GetOneData(
+            db.tickets,
+            {
+                "_id": {"$ne": ObjectId(id)},
+                "id_reporter": payload["id_reporter"],
+                "status": {"$ne": TicketStatusData.CLOSED.value},
+            },
+        )
+        if exist_reporter:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Tiket Pada Pelanggan Tersebut Belum Selesai!"},
+            )
     if "id_assignee" in payload:
+        if payload["id_assignee"] != exist_data.get("id_assignee"):
+            payload["status"] = TicketStatusData.OPEN.value
+
         payload["id_assignee"] = ObjectId(payload["id_assignee"])
-        payload["status"] = TicketStatusData.OPEN.value
     if "id_odc" in payload and payload["id_odc"] is not None:
         payload["id_odc"] = ObjectId(payload["id_odc"])
     if "id_odp" in payload and payload["id_odp"] is not None:
@@ -319,6 +393,26 @@ async def update_ticket(
         await SendWhatsappTicketOpenMessage(
             db, exist_data["_id"], is_only_assignee=True
         )
+
+    return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+
+
+@router.put("/pending/{id}")
+async def pending_ticket(
+    id: str,
+    data: TicketPendingData = Body(..., embed=True),
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    payload = data.dict(exclude_unset=True)
+    exist_data = await GetOneData(db.tickets, {"_id": ObjectId(id)})
+    if not exist_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    payload["status"] = TicketStatusData.PENDING.value
+    result = await UpdateOneData(db.tickets, {"_id": ObjectId(id)}, {"$set": payload})
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
