@@ -285,6 +285,10 @@ async def SendTelegramPaymentMessage(db, id_invoice):
         v_message += (
             f"*Metode Pembayaran*: {invoice_data.get('payment').get('method')}\n"
         )
+        if invoice_data.get("payment").get("method") in ["TRANSFER", "QRIS"]:
+            v_message += (
+                f"*Bukti Pembayaran*: {invoice_data.get('payment').get('image_url')}\n"
+            )
 
         params = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -294,10 +298,6 @@ async def SendTelegramPaymentMessage(db, id_invoice):
         }
         telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?{urlencode(params)}"
         requests.get(telegram_api_url)
-        if invoice_data.get("payment").get("method") in ["TRANSFER", "QRIS"]:
-            await SendTelegramImage(
-                [invoice_data.get("payment").get("image_url")],
-                params["message_thread_id"],
-            )
+
     except Exception as e:
         await CreateTelegramErrorNotification(db, str(e))

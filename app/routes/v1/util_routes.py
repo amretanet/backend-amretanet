@@ -49,10 +49,8 @@ async def upload_file(
 
 
 @router.get("/test")
-async def test():
+async def test(url: str):
     await SendTelegramImage(
-        [
-            "https://api.amreta.net/assets/id-card-attachment/id-card-attachment-1738079198.jpeg"
-        ],
+        [url],
         5,
     )
