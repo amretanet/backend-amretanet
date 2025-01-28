@@ -39,7 +39,6 @@ async def upload_file(
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        os.chown(file_path, 33, 33)
         file_url = f"{base_url}/{STATIC_DIR}/{type.value.lower().replace('_', '-')}/{new_filename}"
         return {"file_url": file_url}
     except Exception:
@@ -53,7 +52,7 @@ async def upload_file(
 async def test():
     await SendTelegramImage(
         [
-            "https://api.amreta.net/assets/id-card-attachment/id-card-attachment-1738078761.jpeg"
+            "https://api.amreta.net/assets/id-card-attachment/id-card-attachment-1738079198.jpeg"
         ],
         5,
     )
