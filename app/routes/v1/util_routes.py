@@ -10,6 +10,7 @@ from app.modules.generals import GetCurrentDateTime
 from pathlib import Path
 import shutil
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,8 +32,7 @@ async def upload_file(
     file_name = type.value.lower().replace("_", "-")
     new_filename = f"{file_name}-{round(GetCurrentDateTime().timestamp())}{Path(file.filename).suffix}"
     file_path = STATIC_DIR / type.value.lower().replace("_", "-") / new_filename
-    base_url = str(request.base_url).rstrip("/")
-
+    base_url = f"https://{request.headers['host']}"
     try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("wb") as buffer:
