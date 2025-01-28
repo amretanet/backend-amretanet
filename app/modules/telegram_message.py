@@ -48,11 +48,13 @@ async def SendTelegramImage(image_url: list, thread_id):
         "message_thread_id": thread_id,
         "media": media_list,
         "caption": "Bukti Pengerjaan",
+        "background": True,
     }
     telegram_api_url = (
         f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMediaGroup"
     )
-    requests.post(telegram_api_url, json=data)
+    response = requests.post(telegram_api_url, json=data)
+    print(response.json())
 
 
 async def SendTelegramTicketOpenMessage(db, id_ticket: str):
