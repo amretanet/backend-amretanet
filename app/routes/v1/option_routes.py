@@ -19,6 +19,17 @@ from app.modules.mikrotik import GetMikrotikRouterDataByName, MikrotikConnection
 router = APIRouter(prefix="/options", tags=["Options"])
 
 
+@router.get("/customer")
+async def get_customer_options(
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    customer_options = await GetAggregateData(
+        db.customers, [], {"_id": 1, "name": 1, "service_number": 1}
+    )
+    return JSONResponse(content={"customer_options": customer_options})
+
+
 @router.get("/hardware")
 async def get_hardware_options(
     current_user: UserData = Depends(GetCurrentUser),
