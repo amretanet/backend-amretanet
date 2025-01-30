@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from bson import ObjectId
 from fastapi import (
     APIRouter,
@@ -36,6 +37,11 @@ load_dotenv()
 DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
 STATIC_DIR = Path("assets")
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+BACKUP_DIR = os.getenv("BACKUP_DIR")
+
+if not os.path.exists(BACKUP_DIR):
+    os.makedirs(BACKUP_DIR)
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -281,3 +287,44 @@ async def migrate_db(
         await CreateManyData(db[collection], data)
 
     return "sudah dimigrasi"
+
+
+@router.get("/backup")
+async def backup_data(
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    collections = await db.list_collection_names()
+    backup_data = {}
+
+    for collection_name in collections:
+        collection = db[collection_name]
+        documents = await collection.find().to_list(None)
+        backup_data[collection_name] = documents
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"{BACKUP_DIR}/mongodb_backup_{timestamp}.json"
+
+    with open(backup_filename, "w", encoding="utf-8") as f:
+        json.dump(backup_data, f, indent=4, default=str, ensure_ascii=False)
+
+    return {"message": "Backup berhasil", "file": backup_filename}
+
+
+@router.get("/restore")
+async def restore_data(
+    file_path: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            backup_data = json.load(f)
+
+        for collection_name, documents in backup_data.items():
+            collection = db[collection_name]
+            if documents:
+                await collection.insert_many(documents)
+
+        return {"message": "Restore berhasil"}
+
+    except Exception as e:
+        return {"error": str(e)}
