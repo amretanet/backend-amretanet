@@ -10,6 +10,12 @@ class InvoiceStatusData(str, Enum):
     PENDING = "PENDING"
 
 
+class InvoiceInsertData(BaseModel):
+    id_customer: str
+    month: str
+    year: str
+
+
 class InvoiceUpdateData(BaseModel):
     id_invoice: str
     id_customer: str

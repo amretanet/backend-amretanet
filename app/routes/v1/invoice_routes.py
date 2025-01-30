@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
-from app.models.invoices import InvoiceStatusData, InvoiceUpdateData
+from app.models.invoices import InvoiceInsertData, InvoiceStatusData, InvoiceUpdateData
 from app.models.payments import PaymentMethodData
 from app.models.generals import Pagination
 from app.models.users import UserData, UserRole
@@ -30,6 +30,7 @@ from app.modules.generals import GetCurrentDateTime, GetDueDateRange, RemoveFile
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_UPDATED_MESSAGE,
+    EXIST_DATA_MESSAGE,
     FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
@@ -41,6 +42,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 PPN = int(os.getenv("PPN"))
+PAID_LEAVE_PERCENTAGE = int(os.getenv("PAID_LEAVE_PERCENTAGE"))
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
@@ -118,7 +120,6 @@ async def get_invoice(
 
 @router.get("/generate")
 async def generate_invoice(
-    id_customer: str = None,
     is_send_whatsapp: bool = True,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -132,8 +133,6 @@ async def generate_invoice(
         },
         "due_date": {"$in": GetDueDateRange(10)},
     }
-    if id_customer:
-        query["_id"] = ObjectId(id_customer)
 
     # add filter query
     pipeline.append({"$match": query})
@@ -262,13 +261,15 @@ async def generate_invoice(
 
         current_unique_code = unique_code + 1
         ppn = 0
-        paid_leave_amount = 0
+        paid_leave_discount = 0
         if customer.get("ppn", 0):
             ppn = customer["amount"] * (PPN / 100)
 
         if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
-            customer["amount"] = customer["amount"] / 2
-            paid_leave_amount = customer["amount"]
+            paid_leave_discount = customer["amount"] * (
+                (100 - PAID_LEAVE_PERCENTAGE) / 100
+            )
+            customer["amount"] = customer["amount"] - paid_leave_discount
 
         final_amount = customer["amount"] + ppn + current_unique_code
         invoice_data = {
@@ -291,8 +292,8 @@ async def generate_invoice(
             "amount": final_amount,
             "created_at": GetCurrentDateTime(),
         }
-        if paid_leave_amount:
-            invoice_data["paid_leave_amount"] = paid_leave_amount
+        if paid_leave_discount:
+            invoice_data["paid_leave_discount"] = paid_leave_discount
 
         invoice_result = await CreateOneData(db.invoices, invoice_data)
         if not invoice_result.inserted_id:
@@ -529,6 +530,198 @@ async def activate_customer(
         await SendWhatsappCustomerActivatedMessage(db, invoice_data["id_customer"])
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
+
+
+@router.post("/add")
+async def create_invoice(
+    data: InvoiceInsertData = Body(..., embed=True),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    payload = data.dict(exclude_unset=True)
+    exist_invoice = await GetOneData(
+        db.invoices,
+        {
+            "id_customer": ObjectId(payload["id_customer"]),
+            "month": payload["month"],
+            "year": payload["year"],
+        },
+    )
+    if exist_invoice:
+        raise HTTPException(status_code=400, detail={"message": EXIST_DATA_MESSAGE})
+
+    pipeline = []
+    query = {"_id": ObjectId(payload["id_customer"])}
+
+    # add filter query
+    pipeline.append({"$match": query})
+
+    # add join id package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "let": {"idPackage": "$id_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
+                    {
+                        "$project": {
+                            "name": 1,
+                            "price": 1,
+                        }
+                    },
+                    {"$limit": 1},
+                ],
+                "as": "package",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "package_amount": {
+                    "$ifNull": [{"$arrayElemAt": ["$package.price.regular", 0]}, 0]
+                }
+            }
+        }
+    )
+
+    # add join id add-on package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "let": {"idAddOnPackage": "$id_add_on_package"},
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
+                            }
+                        }
+                    },
+                    {
+                        "$project": {
+                            "name": 1,
+                            "price": 1,
+                        }
+                    },
+                ],
+                "as": "add_on_packages",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "add_on_package_amount": {
+                    "$sum": {
+                        "$map": {
+                            "input": "$add_on_packages",
+                            "as": "add_on",
+                            "in": {"$ifNull": ["$$add_on.price.regular", 0]},
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    # counting package & add-on package price query
+    pipeline.append(
+        {
+            "$addFields": {
+                "amount": {"$add": ["$package_amount", "$add_on_package_amount"]}
+            },
+        }
+    )
+
+    # add projection query
+    pipeline.append(
+        {
+            "$project": {
+                "name": 1,
+                "service_number": 1,
+                "due_date": 1,
+                "ppn": 1,
+                "package": 1,
+                "package_amount": 1,
+                "add_on_packages": 1,
+                "add_on_package_amount": 1,
+                "amount": 1,
+                "status": 1,
+            }
+        }
+    )
+
+    customer_data = await GetAggregateData(db.customers, pipeline)
+    if len(customer_data) == 0:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    invoice_exist = 0
+    invoice_created = 0
+    for customer in customer_data:
+        unique_code = 0
+        last_unique_code = await GetOneData(
+            db.configurations, {"type": "INVOICE_UNIQUE_CODE"}
+        )
+        if last_unique_code:
+            unique_code = int(last_unique_code["value"])
+
+        current_unique_code = unique_code + 1
+        ppn = 0
+        paid_leave_discount = 0
+        if customer.get("ppn", 0):
+            ppn = customer["amount"] * (PPN / 100)
+
+        if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
+            paid_leave_discount = customer["amount"] * (
+                (100 - PAID_LEAVE_PERCENTAGE) / 100
+            )
+            customer["amount"] = customer["amount"] - paid_leave_discount
+
+        final_amount = customer["amount"] + ppn + current_unique_code
+        invoice_data = {
+            "id_customer": ObjectId(customer["_id"]),
+            "name": customer["name"],
+            "service_number": customer["service_number"],
+            "package": customer["package"],
+            "due_date": datetime.strptime(
+                f"{datetime.now().strftime('%Y-%m')}-{customer['due_date']} 00:00:00",
+                "%Y-%m-%d %H:%M:%S",
+            ),
+            "add_on_packages": customer["add_on_packages"],
+            "month": GetCurrentDateTime().strftime("%m"),
+            "year": GetCurrentDateTime().strftime("%Y"),
+            "status": "UNPAID",
+            "package_amount": customer["package_amount"],
+            "add_on_package_amount": customer["add_on_package_amount"],
+            "ppn": ppn,
+            "unique_code": current_unique_code,
+            "amount": final_amount,
+            "created_at": GetCurrentDateTime(),
+        }
+        if paid_leave_discount:
+            invoice_data["paid_leave_discount"] = paid_leave_discount
+
+        invoice_result = await CreateOneData(db.invoices, invoice_data)
+        if not invoice_result.inserted_id:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
+        await UpdateOneData(
+            db.configurations,
+            {"type": "INVOICE_UNIQUE_CODE"},
+            {"$set": {"value": current_unique_code}},
+        )
+
+        invoice_created += 1
+
+    return JSONResponse(
+        content={
+            "invoice_exist": invoice_exist,
+            "invoice_created": invoice_created,
+        }
+    )
 
 
 @router.put("/update")

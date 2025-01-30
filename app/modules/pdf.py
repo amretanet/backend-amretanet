@@ -211,12 +211,12 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
         ln=False,
         align="R",
     )
-    if "paid_leave_amount" in data:
+    if "paid_leave_discount" in data:
         pdf.ln(7)
         pdf.cell(
             0,
             7,
-            f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_amount', 0))}",
+            f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_discount', 0))}",
             border=False,
             ln=False,
             align="R",
@@ -380,11 +380,11 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         data.get("add_on_package_amount", 0)
     )
     pdf.cell(0, 6, f"Sub Total : Rp{ThousandSeparator(subtotal)}", ln=True, align="C")
-    if "paid_leave_amount" in data:
+    if "paid_leave_discount" in data:
         pdf.cell(
             0,
             6,
-            f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_amount', 0))}",
+            f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_discount', 0))}",
             ln=True,
             align="C",
         )
