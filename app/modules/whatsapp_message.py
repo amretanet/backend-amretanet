@@ -398,8 +398,6 @@ async def SendWhatsappTicketOpenMessage(
                 {
                     "name": 1,
                     "service_number": 1,
-                    "pppoe_username": 1,
-                    "pppoe_password": 1,
                     "location": 1,
                     "phone_number": 1,
                 },
@@ -408,15 +406,6 @@ async def SendWhatsappTicketOpenMessage(
                 ticket_data["customer"] = customer
                 if not is_only_assignee:
                     PHONE_NUMBERS.append(customer.get("phone_number"))
-
-        if "id_odc" in ticket_data and ticket_data["id_odc"] is not None:
-            odc = await GetOneData(db.odc, {"_id": ObjectId(ticket_data["id_odc"])})
-            if odc:
-                ticket_data["odc"] = odc
-        if "id_odp" in ticket_data and ticket_data["id_odp"] is not None:
-            odp = await GetOneData(db.odp, {"_id": ObjectId(ticket_data["id_odp"])})
-            if odp:
-                ticket_data["odp"] = odp
 
         v_message = f"*Tiket OPEN - {ticket_data.get('title', '')}*\n\n"
         v_message += (
@@ -430,16 +419,8 @@ async def SendWhatsappTicketOpenMessage(
                 f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
             )
             v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
-            v_message += f"*Username PPPOE*: {ticket_data.get('customer', '').get('pppoe_username')}\n"
-            v_message += f"*Password PPPOE*: {ticket_data.get('customer', '').get('pppoe_password')}\n"
             v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
         v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
-        if ticket_data.get("odc"):
-            v_message += f"*ODC*: {ticket_data.get('odc', '').get('name')}\n"
-        if ticket_data.get("odp"):
-            v_message += f"*ODP*: {ticket_data.get('odp', '').get('name')}\n"
-        if ticket_data.get("confirm_message"):
-            v_message += f"*Pesan Konfirmasi*: {ticket_data.get('confirm_message', '')}"
 
         for number in PHONE_NUMBERS:
             params = {
@@ -478,8 +459,6 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
                 {
                     "name": 1,
                     "service_number": 1,
-                    "pppoe_username": 1,
-                    "pppoe_password": 1,
                     "location": 1,
                     "phone_number": 1,
                 },
@@ -487,15 +466,6 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
             if customer:
                 PHONE_NUMBERS.append(customer.get("phone_number"))
                 ticket_data["customer"] = customer
-
-        if "id_odc" in ticket_data and ticket_data["id_odc"] is not None:
-            odc = await GetOneData(db.odc, {"_id": ObjectId(ticket_data["id_odc"])})
-            if odc:
-                ticket_data["odc"] = odc
-        if "id_odp" in ticket_data and ticket_data["id_odp"] is not None:
-            odp = await GetOneData(db.odp, {"_id": ObjectId(ticket_data["id_odp"])})
-            if odp:
-                ticket_data["odp"] = odp
 
         v_message = f"*Tiket CLOSED - {ticket_data.get('title', '')}*\n\n"
         v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
@@ -506,14 +476,10 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
                 f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
             )
             v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
-            v_message += f"*Username PPPOE*: {ticket_data.get('customer', '').get('pppoe_username')}\n"
-            v_message += f"*Password PPPOE*: {ticket_data.get('customer', '').get('pppoe_password')}\n"
             v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
-        if "odc" in ticket_data:
-            v_message += f"*ODC*: {ticket_data.get('odc', '').get('name')}\n"
-        if "odp" in ticket_data:
-            v_message += f"*ODP*: {ticket_data.get('odp', '').get('name')}\n"
         v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
+        if ticket_data.get("confirm_message"):
+            v_message += f"*Pesan Konfirmasi*: {ticket_data.get('confirm_message', '')}"
 
         for number in PHONE_NUMBERS:
             params = {

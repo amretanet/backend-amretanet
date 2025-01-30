@@ -262,20 +262,34 @@ async def auto_confirm_moota_invoice(
             response = response.json()
             result = response.get("data", [])
             if len(result) == 1:
+                confirm_data = {
+                    "status": "PAID",
+                    "payment.method": PaymentMethodData.TRANSFER.value,
+                    "payment.paid_at": GetCurrentDateTime(),
+                    "payment.confirmed_at": GetCurrentDateTime(),
+                    "payment.confirmed_by": "moota@gmail.com",
+                }
                 await UpdateOneData(
                     db.invoices,
                     {"_id": ObjectId(invoice["_id"])},
-                    {
-                        "$set": {
-                            "status": "PAID",
-                            "payment.method": PaymentMethodData.TRANSFER.value,
-                            "payment.paid_at": GetCurrentDateTime(),
-                            "payment.confirmed_at": GetCurrentDateTime(),
-                            "payment.confirmed_by": "moota@gmail.com",
-                        }
-                    },
+                    {"$set": confirm_data},
                 )
                 confirmed += 1
+                income_data = {
+                    "id_invoice": ObjectId(id),
+                    "nominal": invoice.get("amount", 0),
+                    "category": "BAYAR TAGIHAN",
+                    "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice.get('service_number', '-')} a/n {invoice.get('name', '-')}, Periode {DateIDFormatter(invoice.get('due_date'))}",
+                    "method": confirm_data["payment.method"],
+                    "date": confirm_data["payment.paid_at"],
+                    "created_at": GetCurrentDateTime(),
+                }
+                await UpdateOneData(
+                    db.incomes,
+                    {"id_invoice": ObjectId(invoice["_id"])},
+                    {"$set": income_data},
+                    upsert=True,
+                )
 
                 # update customer status
                 await UpdateOneData(
@@ -288,6 +302,7 @@ async def auto_confirm_moota_invoice(
                 )
                 if customer_data:
                     await ActivateMikrotikPPPSecret(db, customer_data, False)
+
                 await SendWhatsappPaymentSuccessMessage(db, invoice["_id"])
             elif len(result) > 1:
                 await UpdateOneData(
