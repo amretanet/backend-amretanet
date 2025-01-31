@@ -424,7 +424,7 @@ def CreateInvoicePDF(data: list) -> BytesIO:
 
     # save to pdf
     pdf_bytes = BytesIO()
-    pdf_output = pdf.output(dest="S").encode("latin1")
+    pdf_output = pdf.output(dest="S")
     pdf_bytes.write(pdf_output)
     pdf_bytes.seek(0)
     return pdf_bytes
@@ -442,7 +442,7 @@ def CreateInvoiceThermal(data: list):
 
     # save to pdf
     pdf_bytes = BytesIO()
-    pdf_output = pdf.output(dest="S").encode("latin1")
+    pdf_output = pdf.output(dest="S")
     pdf_bytes.write(pdf_output)
     pdf_bytes.seek(0)
     return pdf_bytes
