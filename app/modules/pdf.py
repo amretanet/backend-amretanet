@@ -138,6 +138,7 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
         7,
         data.get("customer", "-").get("address", "-"),
         border=False,
+        ln=True,
         align="L",
     )
     # phone number
