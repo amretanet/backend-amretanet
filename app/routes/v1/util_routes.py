@@ -1,4 +1,6 @@
+from datetime import datetime
 import json
+from bson import ObjectId, json_util
 from fastapi import (
     APIRouter,
     Depends,
@@ -70,7 +72,9 @@ async def backup_data(
     backup_filename = f"{BACKUP_DIR}/mongodb_backup.json"
 
     with open(backup_filename, "w", encoding="utf-8") as f:
-        json.dump(backup_data, f, indent=4, default=str, ensure_ascii=False)
+        json.dump(
+            backup_data, f, indent=4, default=json_util.default, ensure_ascii=False
+        )
 
     return {"message": "Backup berhasil", "file": backup_filename}
 
