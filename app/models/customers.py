@@ -40,14 +40,14 @@ class CustomerBillingTypeData(str, Enum):
 
 class CustomerIDCardData(BaseModel):
     type: str
-    number: str
+    number: int
     image_url: Optional[str]
 
 
 class CustomerLocationData(BaseModel):
     house_status: str
     house_owner: str
-    house_image_url: Optional[str] = None   
+    house_image_url: Optional[str] = None
     address: str
     latitude: float
     longitude: float

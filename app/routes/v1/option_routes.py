@@ -202,7 +202,7 @@ async def get_router_options(
 
 @router.get("/package")
 async def get_package_options(
-    is_displayed: int = None,
+    is_displayed: int = 1,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     PackageOptionProjections = {
