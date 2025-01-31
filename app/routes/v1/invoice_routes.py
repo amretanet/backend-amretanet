@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -103,7 +104,38 @@ async def get_invoice(
             }
         },
         {"$unwind": "$customer"},
-        {"$sort": {"due_date": -1}},
+        {
+            "$addFields": {
+                "status_priority": {
+                    "$switch": {
+                        "branches": [
+                            {
+                                "case": {
+                                    "$eq": [
+                                        "$status",
+                                        InvoiceStatusData.UNPAID.value,
+                                    ]
+                                },
+                                "then": 1,
+                            },
+                            {
+                                "case": {
+                                    "$eq": ["$status", InvoiceStatusData.PENDING.value]
+                                },
+                                "then": 2,
+                            },
+                        ],
+                        "default": 3,
+                    }
+                }
+            }
+        },
+        {
+            "$sort": {
+                "status_priority": 1,
+                "due_date": 1,
+            }
+        },
     ]
 
     invoice_data, count = await GetManyData(
@@ -120,10 +152,11 @@ async def get_invoice(
 
 @router.get("/generate")
 async def generate_invoice(
-    is_send_whatsapp: bool = True,
+    is_send_whatsapp: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
+    current_month_dates, next_month_dates = GetDueDateRange(10)
     query = {
         "status": {
             "$in": [
@@ -131,7 +164,14 @@ async def generate_invoice(
                 CustomerStatusData.PAID_LEAVE.value,
             ]
         },
-        "due_date": {"$in": GetDueDateRange(10)},
+        "$or": [
+            {
+                "due_date": {"$in": current_month_dates},
+            },
+            {
+                "due_date": {"$in": next_month_dates},
+            },
+        ],
     }
 
     # add filter query
@@ -241,11 +281,19 @@ async def generate_invoice(
 
     invoice_exist = 0
     invoice_created = 0
+    current_date = GetCurrentDateTime()
+    next_month = current_date + relativedelta(months=1)
     for customer in customer_data:
+        target_month = current_date.strftime("%m")
+        target_year = current_date.strftime("%Y")
+        if customer.get("due_date") in next_month_dates:
+            target_month = next_month.strftime("%m")
+            target_year = next_month.strftime("%Y")
+
         query = {
             "service_number": customer["service_number"],
-            "month": GetCurrentDateTime().strftime("%m"),
-            "year": GetCurrentDateTime().strftime("%Y"),
+            "month": target_month,
+            "year": target_year,
         }
         exist_invoice = await GetOneData(db.invoices, query)
         if exist_invoice:
@@ -278,12 +326,12 @@ async def generate_invoice(
             "service_number": customer["service_number"],
             "package": customer["package"],
             "due_date": datetime.strptime(
-                f"{datetime.now().strftime('%Y-%m')}-{customer['due_date']} 00:00:00",
+                f"{target_year}-{target_month}-{customer['due_date']} 00:00:00",
                 "%Y-%m-%d %H:%M:%S",
             ),
             "add_on_packages": customer["add_on_packages"],
-            "month": GetCurrentDateTime().strftime("%m"),
-            "year": GetCurrentDateTime().strftime("%Y"),
+            "month": target_month,
+            "year": target_year,
             "status": "UNPAID",
             "package_amount": customer["package_amount"],
             "add_on_package_amount": customer["add_on_package_amount"],
@@ -419,7 +467,7 @@ async def invoice_whatsapp_reminder(
         for id in id_list:
             await SendWhatsappPaymentReminderMessage(db, id)
     else:
-        from_date = (GetCurrentDateTime() + timedelta(days=5)).replace(
+        from_date = GetCurrentDateTime().replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         to_date = (GetCurrentDateTime() + timedelta(days=5)).replace(

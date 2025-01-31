@@ -98,15 +98,28 @@ def GetDueDateRange(gap: int):
     current_date = GetCurrentDateTime()
     target_date = current_date + timedelta(days=gap)
 
-    current_day = current_date.day
-    target_day = target_date.day
+    current_month = current_date.month
+    current_year = current_date.year
 
-    if current_day <= target_day:
-        date_range = [str(day).zfill(2) for day in range(current_day, target_day + 1)]
-    else:
-        date_range = [str(day).zfill(2) for day in range(target_day, current_day + 1)]
+    target_month = target_date.month
 
-    return date_range
+    last_day_of_current_month = (
+        datetime(current_year, current_month + 1, 1) - timedelta(days=1)
+    ).day
+
+    current_month_dates = [
+        str(day).zfill(2)
+        for day in range(current_date.day, last_day_of_current_month + 1)
+    ]
+
+    next_month_dates = []
+    if target_month != current_month:
+        days_in_next_month = target_date.day
+        next_month_dates = [
+            str(day).zfill(2) for day in range(1, days_in_next_month + 1)
+        ]
+
+    return current_month_dates, next_month_dates
 
 
 def DateIDFormatter(date, is_show_time: bool = False):
