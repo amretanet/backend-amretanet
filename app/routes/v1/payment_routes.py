@@ -250,6 +250,7 @@ async def auto_confirm_moota_invoice(
     invoice_data, _ = await GetManyData(db.invoices, [{"$match": query}])
     for invoice in invoice_data:
         amount = invoice.get("amount", 0)
+        print("check amount:", amount)
         headers = {
             "Accept": "application/json",
             "Authorization": f"Bearer {MOOTA_API_TOKEN}",
@@ -260,6 +261,7 @@ async def auto_confirm_moota_invoice(
         try:
             response = requests.get(url, headers=headers)
             response = response.json()
+            print(response)
             result = response.get("data", [])
             if len(result) == 1:
                 confirm_data = {
