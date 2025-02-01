@@ -11,6 +11,7 @@ from librouteros.query import Key
 from dotenv import load_dotenv
 import os
 from datetime import timedelta
+from urllib.parse import urlencode
 from pymongo import MongoClient
 
 load_dotenv()
@@ -22,6 +23,11 @@ MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
 WHATSAPP_ADMIN_NUMBER = os.getenv("WHATSAPP_ADMIN_NUMBER")
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_INSTALLATION_THREAD_ID = os.getenv("TELEGRAM_INSTALLATION_THREAD_ID")
+TELEGRAM_MAINTENANCE_THREAD_ID = os.getenv("TELEGRAM_MAINTENANCE_THREAD_ID")
+TELEGRAM_PAYMENT_THREAD_ID = os.getenv("TELEGRAM_PAYMENT_THREAD_ID")
 
 
 def get_database():
@@ -92,6 +98,44 @@ def send_whatsapp_payment_success(id_invoice):
         }
         whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
+    except Exception as e:
+        print(str(e))
+
+
+def send_telegram_payment_success(id_invoice):
+    db = get_database()
+    try:
+        invoice_data = db.invoices.find_one({"_id": id_invoice})
+        if not invoice_data:
+            return
+
+        v_message = "*Pembayaran Pelanggan*\n\n"
+        v_message += f"*Nama*: {invoice_data.get('name', 'Pelanggan')}\n"
+        v_message += f"*Nomor Layanan*: {invoice_data.get('service_number', '-')}\n"
+        v_message += (
+            f"*Tagihan*: Rp{ThousandSeparator(invoice_data.get('amount', 0))}\n"
+        )
+        v_message += (
+            f"*Periode*: {DateIDFormatter(str(invoice_data.get('due_date')))}\n"
+        )
+        v_message += f"*Tanggal Pembayaran*: {DateIDFormatter(str(invoice_data.get('payment').get('paid_at')))}\n"
+        v_message += (
+            f"*Metode Pembayaran*: {invoice_data.get('payment').get('method')}\n"
+        )
+        if invoice_data.get("payment").get("method") in ["TRANSFER", "QRIS"]:
+            v_message += (
+                f"*Bukti Pembayaran*: {invoice_data.get('payment').get('image_url')}\n"
+            )
+
+        params = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "message_thread_id": TELEGRAM_PAYMENT_THREAD_ID,
+            "text": v_message,
+            "parse_mode": "Markdown",
+        }
+        telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?{urlencode(params)}"
+        requests.get(telegram_api_url)
+
     except Exception as e:
         print(str(e))
 
@@ -229,6 +273,7 @@ async def main():
                     activate_mikrotik_ppp_secret(customer_data, False)
 
                 send_whatsapp_payment_success(invoice["_id"])
+                send_telegram_payment_success(invoice["_id"])
             elif len(result) > 1:
                 print(f"Mutation is Duplicated : {result}")
                 duplicated += 1
