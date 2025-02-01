@@ -23,6 +23,7 @@ from app.modules.whatsapp_message import (
     SendWhatsappCustomerActivatedMessage,
     SendWhatsappIsolirMessage,
     SendWhatsappPaymentCreatedMessage,
+    SendWhatsappPaymentOverdueMessage,
     SendWhatsappPaymentReminderMessage,
 )
 from app.models.customers import CustomerStatusData
@@ -456,8 +457,8 @@ async def print_invoice_thermal(
     )
 
 
-@router.get("/whatsapp-reminder")
-async def invoice_whatsapp_reminder(
+@router.get("/created")
+async def invoice_whatsapp_created(
     id: str = None,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -465,7 +466,7 @@ async def invoice_whatsapp_reminder(
         decoded_id = base64.b64decode(id).decode("utf-8")
         id_list = [item.strip() for item in decoded_id.split(",")]
         for id in id_list:
-            await SendWhatsappPaymentReminderMessage(db, id)
+            await SendWhatsappPaymentCreatedMessage(db, id)
     else:
         from_date = GetCurrentDateTime().replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -486,7 +487,7 @@ async def invoice_whatsapp_reminder(
             ],
         )
         for item in invoice_data:
-            await SendWhatsappPaymentReminderMessage(db, item["_id"])
+            await SendWhatsappPaymentCreatedMessage(db, item["_id"])
             await UpdateOneData(
                 db.invoices,
                 {"_id": ObjectId(item["_id"])},
@@ -494,6 +495,85 @@ async def invoice_whatsapp_reminder(
             )
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
+
+
+@router.get("/whatsapp-reminder")
+async def invoice_whatsapp_reminder(
+    id: str = None,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if id:
+        decoded_id = base64.b64decode(id).decode("utf-8")
+        id_list = [item.strip() for item in decoded_id.split(",")]
+        for id in id_list:
+            await SendWhatsappPaymentReminderMessage(db, id)
+    else:
+        from_date = GetCurrentDateTime().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        to_date = GetCurrentDateTime().replace(
+            hour=23, minute=59, second=59, microsecond=0
+        )
+        invoice_data = await GetAggregateData(
+            db.invoices,
+            [
+                {
+                    "$match": {
+                        "status": InvoiceStatusData.UNPAID.value,
+                        "due_date": {"$gte": from_date, "$lte": to_date},
+                        "is_whatsapp_reminder_sended": {"$exists": False},
+                    },
+                },
+            ],
+        )
+        for item in invoice_data:
+            await SendWhatsappPaymentReminderMessage(db, item["_id"])
+            await UpdateOneData(
+                db.invoices,
+                {"_id": ObjectId(item["_id"])},
+                {"$set": {"is_whatsapp_reminder_sended": True}},
+            )
+
+    return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
+
+
+@router.get("/overdue")
+async def invoice_whatsapp_overdue(
+    id: str = None,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if id:
+        decoded_id = base64.b64decode(id).decode("utf-8")
+        id_list = [item.strip() for item in decoded_id.split(",")]
+        for id in id_list:
+            invoice_data = await GetOneData(
+                db.invoices,
+                {"_id": ObjectId(id)},
+            )
+            if not invoice_data:
+                continue
+
+            await SendWhatsappPaymentOverdueMessage(db, invoice_data["_id"])
+    else:
+        pipeline = [
+            {
+                "$match": {
+                    "status": InvoiceStatusData.UNPAID.value,
+                    "due_date": {"$lt": GetCurrentDateTime()},
+                    "is_whatsapp_overdue_sended": {"$exists": False},
+                }
+            }
+        ]
+        invoice_data = await GetAggregateData(db.invoices, pipeline)
+        for invoice in invoice_data:
+            await SendWhatsappPaymentOverdueMessage(db, invoice["_id"])
+            await UpdateOneData(
+                db.invoices,
+                {"_id": ObjectId(invoice["_id"])},
+                {"$set": {"is_whatsapp_overdue_sended": True}},
+            )
+
+    return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
 
 
 @router.get("/isolir-customer")
@@ -528,6 +608,7 @@ async def isolir_customer(
                 "$match": {
                     "status": InvoiceStatusData.UNPAID.value,
                     "due_date": {"$lt": GetCurrentDateTime()},
+                    "is_whatsapp_isolir_sended": {"$exists": False},
                 }
             }
         ]
@@ -547,6 +628,11 @@ async def isolir_customer(
                 )
                 await ActivateMikrotikPPPSecret(db, customer_data, True)
                 await SendWhatsappIsolirMessage(db, invoice["_id"])
+                await UpdateOneData(
+                    db.invoices,
+                    {"_id": ObjectId(invoice["_id"])},
+                    {"$set": {"is_whatsapp_isolir_sended": True}},
+                )
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
