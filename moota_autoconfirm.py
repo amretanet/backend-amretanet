@@ -254,6 +254,7 @@ async def main():
                     "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice.get('service_number', '-')} a/n {invoice.get('name', '-')}, Periode {DateIDFormatter(str(invoice.get('due_date')))}",
                     "method": confirm_data["payment.method"],
                     "date": confirm_data["payment.paid_at"],
+                    "id_receiver": ObjectId("679c82f005a1aae3d2b43520"),
                     "created_at": GetCurrentDateTime(),
                 }
                 db.incomes.update_one(
