@@ -64,7 +64,7 @@ async def get_customers(
     referral: str = None,
     is_maps_only: bool = False,
     page: int = 1,
-    items: int = 1,
+    items: int = 10,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -185,12 +185,13 @@ async def get_customers(
         }
     )
 
-    customer_maps_data = await GetAggregateData(
-        db.customers, pipeline, CustomerProjections
-    )
     if is_maps_only:
+        customer_maps_data = await GetAggregateData(
+            db.customers, pipeline, CustomerProjections
+        )
         return JSONResponse(content={"customer_maps_data": customer_maps_data})
 
+    pipeline.append({"$sort": {"service_number": 1}})
     customer_data, count = await GetManyData(
         db.customers, pipeline, CustomerProjections, {"page": page, "items": items}
     )
@@ -199,7 +200,6 @@ async def get_customers(
     return JSONResponse(
         content={
             "customer_data": customer_data,
-            "customer_maps_data": customer_maps_data,
             "pagination_info": pagination_info,
         }
     )
