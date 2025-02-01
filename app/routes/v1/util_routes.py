@@ -70,19 +70,15 @@ async def backup_data(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     collections = await db.list_collection_names()
-    backup_data = {}
 
     for collection_name in collections:
         collection = db[collection_name]
         documents = await collection.find().to_list(None)
-        backup_data[collection_name] = documents
-
-    backup_filename = f"{BACKUP_DIR}/mongodb_backup.json"
-
-    with open(backup_filename, "w", encoding="utf-8") as f:
-        json.dump(
-            backup_data, f, indent=4, default=json_util.default, ensure_ascii=False
-        )
+        backup_filename = f"{BACKUP_DIR}/{collection_name}.json"
+        with open(backup_filename, "w", encoding="utf-8") as f:
+            json.dump(
+                documents, f, indent=4, default=json_util.default, ensure_ascii=False
+            )
 
     return {"message": "Backup berhasil", "file": backup_filename}
 
