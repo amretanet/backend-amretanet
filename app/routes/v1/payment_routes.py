@@ -225,14 +225,14 @@ async def confirm_payment(
 
 
 @router.get("/moota/mutation")
-async def get_moota_mutation(amount: int = None):
+async def get_moota_mutation(amount: int = 0):
     headers = {
         "Accept": "application/json",
         "Authorization": f"Bearer {MOOTA_API_TOKEN}",
     }
-    url = "https://app.moota.co/api/v2/mutation?amount=170000"
-    # if amount is not None:
-
+    start_date = (GetCurrentDateTime() - timedelta(days=3)).strftime("%Y-%m-%d")
+    end_date = GetCurrentDateTime().strftime("%Y-%m-%d")
+    url = f"https://app.moota.co/api/v2/mutation?amount={amount}&start_date={start_date}&end_date={end_date}"
     try:
         response = requests.get(url, headers=headers)
         return response.json()
