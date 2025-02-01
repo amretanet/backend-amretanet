@@ -1,6 +1,5 @@
-from datetime import datetime
 import json
-from bson import ObjectId, json_util
+from bson import json_util
 from fastapi import (
     APIRouter,
     Depends,
@@ -13,6 +12,7 @@ from app.models.generals import UploadImageType
 from app.modules.generals import GetCurrentDateTime
 from pathlib import Path
 import shutil
+from app.modules.crud_operations import GetOneData, UpdateOneData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import os
 from passlib.context import CryptContext
@@ -55,6 +55,14 @@ async def upload_file(
             status_code=500,
             detail={"message": "Terjadi Kesalahan Pada Proses Upload Gambar"},
         )
+
+
+@router.get("/reset-unique-code")
+async def reset_unique_code(db: AsyncIOMotorClient = Depends(GetAmretaDatabase)):
+    result = await UpdateOneData(
+        db.configurations, {"type": "INVOICE_UNIQUE_CODE"}, {"$set": {"value": 1}}
+    )
+    return result
 
 
 @router.get("/backup")

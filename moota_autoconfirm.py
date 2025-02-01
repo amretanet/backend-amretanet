@@ -59,7 +59,7 @@ def send_whatsapp_payment_success(id_invoice):
         whatsapp_message = db.configurations.find_one(
             {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
         )
-        customer_data = db.customers.find_one({"_id": invoice_data["_id_customer"]})
+        customer_data = db.customers.find_one({"_id": invoice_data["id_customer"]})
         if (
             not invoice_data
             or not whatsapp_bot
