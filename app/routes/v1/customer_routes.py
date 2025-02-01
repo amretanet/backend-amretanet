@@ -95,6 +95,12 @@ async def get_customers(
     # add filter query
     pipeline.append({"$match": query})
 
+    if is_maps_only:
+        customer_maps_data = await GetAggregateData(
+            db.customers, pipeline, CustomerProjections
+        )
+        return JSONResponse(content={"customer_maps_data": customer_maps_data})
+
     # add join id odp query
     pipeline.append(
         {
@@ -184,12 +190,6 @@ async def get_customers(
             },
         }
     )
-
-    if is_maps_only:
-        customer_maps_data = await GetAggregateData(
-            db.customers, pipeline, CustomerProjections
-        )
-        return JSONResponse(content={"customer_maps_data": customer_maps_data})
 
     pipeline.append({"$sort": {"service_number": 1}})
     customer_data, count = await GetManyData(
