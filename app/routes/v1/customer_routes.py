@@ -62,7 +62,6 @@ async def get_customers(
     id_router: str = None,
     status: int = None,
     referral: str = None,
-    is_maps_only: bool = False,
     page: int = 1,
     items: int = 10,
     current_user: UserData = Depends(GetCurrentUser),
@@ -94,12 +93,6 @@ async def get_customers(
 
     # add filter query
     pipeline.append({"$match": query})
-
-    if is_maps_only:
-        customer_maps_data = await GetAggregateData(
-            db.customers, pipeline, CustomerProjections
-        )
-        return JSONResponse(content={"customer_maps_data": customer_maps_data})
 
     # add join id odp query
     pipeline.append(
@@ -203,6 +196,49 @@ async def get_customers(
             "pagination_info": pagination_info,
         }
     )
+
+
+@router.get("/maps")
+async def get_customer_maps(
+    key: str = None,
+    id_odp: str = None,
+    id_router: str = None,
+    status: int = None,
+    referral: str = None,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = []
+    query = {}
+    if key:
+        query["$or"] = [
+            {"name": {"$regex": key, "$options": "i"}},
+            {
+                "$expr": {
+                    "$regexMatch": {
+                        "input": {"$toString": "$service_number"},
+                        "regex": key,
+                        "options": "i",
+                    }
+                }
+            },
+        ]
+    if id_odp:
+        query["id_odp"] = ObjectId(id_odp)
+    if id_router:
+        query["id_router"] = ObjectId(id_router)
+    if status is not None:
+        query["status"] = status
+    if referral:
+        query["referral"] = referral
+
+    # add filter query
+    pipeline.append({"$match": query})
+
+    customer_maps_data = await GetAggregateData(
+        db.customers, pipeline, CustomerProjections
+    )
+    return JSONResponse(content={"customer_maps_data": customer_maps_data})
 
 
 @router.get("/next-service-number")
