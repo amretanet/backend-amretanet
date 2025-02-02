@@ -327,7 +327,7 @@ async def generate_invoice(
             "service_number": customer["service_number"],
             "package": customer["package"],
             "due_date": datetime.strptime(
-                f"{target_year}-{target_month}-{customer['due_date']} 00:00:00",
+                f"{target_year}-{target_month}-{customer['due_date']} 23:59:59",
                 "%Y-%m-%d %H:%M:%S",
             ),
             "add_on_packages": customer["add_on_packages"],
@@ -820,7 +820,7 @@ async def create_invoice(
             "service_number": customer["service_number"],
             "package": customer["package"],
             "due_date": datetime.strptime(
-                f"{payload['year']}-{payload['month']}-{customer['due_date']} 00:00:00",
+                f"{payload['year']}-{payload['month']}-{customer['due_date']} 23:59:59",
                 "%Y-%m-%d %H:%M:%S",
             ),
             "add_on_packages": customer["add_on_packages"],
