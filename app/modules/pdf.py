@@ -503,7 +503,7 @@ def CreatePDFCashflowBody(
     total_text = f"Total: Rp{ThousandSeparator(saldo_count)}"
     pdf.cell(0, 7, total_text, border=False, ln=True, align="R")
     pdf.set_font("Arial", "", 8)
-    number_to_words_text = f"({NumberToWords(saldo_count)} Rupiah)"
+    number_to_words_text = f"({NumberToWords(int(saldo_count))} Rupiah)"
     pdf.multi_cell(0, 7, number_to_words_text, border=False, align="R")
     pdf.ln(10)
     pdf.set_font("Arial", "", 10)
