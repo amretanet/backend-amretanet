@@ -241,7 +241,7 @@ async def main():
                     "status": "PAID",
                     "payment.method": PaymentMethodData.TRANSFER.value,
                     "payment.paid_at": GetCurrentDateTime(),
-                    "payment.description": f"Pembayaran Tagihan Periode{DateIDFormatter(str(invoice.get('due_date')))} (By Moota)",
+                    "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice.get('due_date')))} (By Moota)",
                     "payment.confirmed_at": GetCurrentDateTime(),
                     "payment.confirmed_by": "moota@gmail.com",
                 }
