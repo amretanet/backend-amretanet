@@ -78,12 +78,42 @@ async def get_user_options(
     if role:
         query["role"] = role
 
-    pipeline = [{"$match": query}, {"$sort": {"role": 1, "name": -1}}]
+    pipeline = [
+        {"$match": query},
+        {
+            "$lookup": {
+                "from": "customers",
+                "let": {"idUser": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$id_user", "$$idUser"]}}},
+                    {"$project": {"name": 1, "service_number": 1}},
+                ],
+                "as": "customer",
+            }
+        },
+        {
+            "$addFields": {
+                "service_number": {
+                    "$ifNull": [{"$arrayElemAt": ["$customer.service_number", 0]}, None]
+                }
+            }
+        },
+        {
+            "$sort": {"role": 1, "name": -1},
+        },
+    ]
 
     user_options = await GetAggregateData(
         db.users,
         pipeline,
-        {"_id": 0, "title": "$name", "value": "$_id", "role": 1, "referral": 1},
+        {
+            "_id": 0,
+            "title": "$name",
+            "value": "$_id",
+            "role": 1,
+            "referral": 1,
+            "service_number": 1,
+        },
     )
     return JSONResponse(content={"user_options": user_options})
 
