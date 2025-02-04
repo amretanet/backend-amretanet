@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 from bson import ObjectId
 from fastapi import (
     APIRouter,
@@ -8,11 +9,11 @@ from fastapi import (
     HTTPException,
     Request,
 )
+import urllib.parse
 from app.models.notifications import NotificationTypeData
 from app.models.invoices import InvoiceStatusData
 from app.models.payments import (
     PaymentPayOffData,
-    PaymentVAInsertData,
     RequestConfirmData,
 )
 from app.models.customers import CustomerStatusData
@@ -37,7 +38,6 @@ from app.modules.whatsapp_message import (
 import requests
 from dotenv import load_dotenv
 import hashlib
-import hmac
 import os
 from datetime import timedelta
 from app.modules.telegram_message import SendTelegramPaymentMessage
@@ -47,35 +47,14 @@ load_dotenv()
 # moota config
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
-# tripay config
-TRIPAY_API_TOKEN = os.getenv("TRIPAY_API_TOKEN")
-TRIPAY_PRIVATE_KEY = os.getenv("TRIPAY_PRIVATE_KEY")
-TRIPAY_MERCHANT_CODE = os.getenv("TRIPAY_MERCHANT_CODE")
+# duitku config
+DUITKU_API_DOMAIN = os.getenv("DUITKU_API_DOMAIN")
+DUITKU_MERCHANT_CODE = os.getenv("DUITKU_MERCHANT_CODE")
+DUITKU_API_TOKEN = os.getenv("DUITKU_API_TOKEN")
+DUITKU_CALLBACK_URL = os.getenv("DUITKU_CALLBACK_URL")
+DUITKU_RETURN_URL = os.getenv("DUITKU_RETURN_URL")
 
 router = APIRouter(prefix="/payment", tags=["Payments"])
-
-
-@router.get("/channel")
-async def get_payment_channel(
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-):
-    headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {TRIPAY_API_TOKEN}",
-    }
-    url = "https://tripay.co.id/api/merchant/payment-channel"
-
-    channel_options = []
-    return channel_options
-    # try:
-    #     response = requests.get(url, headers=headers, timeout=5)
-    #     response = response.json()
-    #     if response["success"]:
-    #         channel_options = response["data"]
-
-    #     return channel_options
-    # except requests.exceptions.RequestException:
-    #     return channel_options
 
 
 @router.put("/pay-off/{id}")
@@ -378,16 +357,12 @@ async def request_confirm_payment(
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
-@router.post("/virtual-account/add")
+@router.post("/virtual-account/add/{id_invoice}")
 async def create_virtual_account_payment(
-    data: PaymentVAInsertData = Body(..., embed=True),
+    id_invoice: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    payload = data.dict(exclude_unset=True)
-
-    exist_invoice = await GetOneData(
-        db.invoices, {"_id": ObjectId(payload["id_invoice"])}
-    )
+    exist_invoice = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
     if not exist_invoice:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
@@ -403,61 +378,37 @@ async def create_virtual_account_payment(
     if customer_data:
         exist_invoice["customer"] = customer_data
 
-    merchant_ref = exist_invoice["_id"]
-    amount = exist_invoice["amount"]
-
-    sign_str = "{}{}{}".format(TRIPAY_MERCHANT_CODE, merchant_ref, amount)
-    signature = hmac.new(
-        bytes(TRIPAY_PRIVATE_KEY, "latin-1"), bytes(sign_str, "latin-1"), hashlib.sha256
-    ).hexdigest()
-
-    tripay_payload = {
-        "method": payload["method"],
-        "merchant_ref": merchant_ref,
-        "amount": amount,
-        "customer_name": exist_invoice.get("name", "-"),
-        "customer_email": exist_invoice.get("customer", "-").get("email", "-"),
-        "customer_phone": exist_invoice.get("customer", "-").get("phone_number", "-"),
-        "order_items": [
-            {
-                "name": f"Pembayaran Layanan Amreta Net {exist_invoice.get('service_number', '')}",
-                "price": amount,
-                "quantity": 1,
-            },
-        ],
-        "signature": signature,
+    payload = {
+        "paymentAmount": exist_invoice.get("amount", 0),
+        "merchantOrderId": exist_invoice["_id"],
+        "productDetails": "Pembayaran Paket Internet",
+        "additionalParam": "",
+        "merchantUserInfo": "",
+        "customerVaName": exist_invoice.get("customer", {}).get("name", ""),
+        "email": exist_invoice.get("customer", {}).get("email", ""),
+        "phoneNumber": f"0{exist_invoice.get('customer', {}).get('phone_number', '')}",
+        "callbackUrl": DUITKU_CALLBACK_URL,
+        "returnUrl": DUITKU_RETURN_URL,
     }
+    url = f"{DUITKU_API_DOMAIN}/api/merchant/createInvoice"
+
+    timestamp = str(int(time.time() * 1000))
+    signature_string = f"{DUITKU_MERCHANT_CODE}{timestamp}{DUITKU_API_TOKEN}"
+    signature = hashlib.sha256(signature_string.encode()).hexdigest()
+
     headers = {
         "Accept": "application/json",
-        "Authorization": f"Bearer {TRIPAY_API_TOKEN}",
+        "Content-Type": "application/json",
+        "x-duitku-signature": signature,
+        "x-duitku-timestamp": timestamp,
+        "x-duitku-merchantcode": DUITKU_MERCHANT_CODE,
     }
-
-    url = "https://tripay.co.id/api/transaction/create"
-
     try:
-        response = requests.post(url, json=tripay_payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers)
         response = response.json()
-        response = response.get("data", None)
-        if response:
-            update_data = {
-                "status": "UNPAID",
-                "payment": {
-                    "reference": response["reference"],
-                    "name": response["payment_name"],
-                    "method": response["payment_method"],
-                    "created_at": GetCurrentDateTime(),
-                },
-            }
-            await UpdateOneData(
-                db.invoices,
-                {"_id": ObjectId(payload["id_invoice"])},
-                {"$set": update_data},
-            )
-            return response
-
-        return None
+        return JSONResponse(content=response)
     except requests.exceptions.RequestException:
-        return None
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
 @router.post("/virtual-account/callback")
@@ -466,37 +417,93 @@ async def virtual_account_callback(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     try:
-        # get callback signature
-        callback_signature = request.headers.get("x-callback-signature")
-        if not callback_signature:
-            raise HTTPException(status_code=400, detail="Signature not found")
-
         body = await request.body()
-        callback_data = json.loads(body)
+        if not body:
+            raise HTTPException(status_code=400, detail={"message": "Body is Not JSON"})
 
-        # verify signature
-        json_data = await request.json()
-        json_string = json.dumps(json_data, separators=(",", ":"))
+        body_str = body.decode("utf-8")
+        if body_str.startswith("{"):
+            callback_data = json.loads(body_str)
+        else:
+            parsed_data = urllib.parse.parse_qs(body_str)
+            callback_data = {key: value[0] for key, value in parsed_data.items()}
 
-        # create signature
-        signature = hmac.new(
-            bytes(TRIPAY_PRIVATE_KEY, "latin-1"),
-            bytes(json_string, "latin-1"),
-            hashlib.sha256,
-        ).hexdigest()
+        if callback_data.get("resultCode") == "00":
+            id_invoice = callback_data.get("merchantOrderId")
+            if id_invoice:
+                invoice_data = await GetOneData(
+                    db.invoices, {"_id": ObjectId(id_invoice)}
+                )
+                if not invoice_data:
+                    pass
 
-        if callback_signature != signature:
-            raise HTTPException(status_code=403, detail="Invalid signature")
+                result = await UpdateOneData(
+                    db.invoices,
+                    {"_id": ObjectId(id_invoice)},
+                    {
+                        "$set": {
+                            "status": InvoiceStatusData.PAID,
+                            "payment.method": PaymentMethodData.TRANSFER.value,
+                            "payment.paid_at": GetCurrentDateTime(),
+                            "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice_data.get('due_date')))} (By Duitku)",
+                            "payment.confirmed_at": GetCurrentDateTime(),
+                            "payment.confirmed_by": "duitku@gmail.com",
+                        }
+                    },
+                    upsert=True,
+                )
+                if not result:
+                    pass
 
-        # status = callback_data.get("status", None)
-        # merchant_ref = callback_data.get("merchant_ref", None)
+                income_data = {
+                    "id_invoice": ObjectId(id_invoice),
+                    "nominal": invoice_data.get("amount", 0),
+                    "category": "BAYAR TAGIHAN",
+                    "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
+                    "method": PaymentMethodData.TRANSFER.value,
+                    "date": GetCurrentDateTime(),
+                    "id_receiver": ObjectId("67a1c07d327cb97bbe41ea8a"),
+                    "created_at": GetCurrentDateTime(),
+                }
+                await UpdateOneData(
+                    db.incomes,
+                    {"id_invoice": ObjectId(id_invoice)},
+                    {"$set": income_data},
+                    upsert=True,
+                )
 
-        # if status == "PAID" and merchant_ref:
-        #     UpdateOneData(db.invoice,{"_id":ObjectId(merchant_ref)},{"$set"})
+                await SendWhatsappPaymentSuccessMessage(db, id_invoice)
+                await SendTelegramPaymentMessage(db, id_invoice)
 
-        print(callback_data)
+                customer_data = await GetOneData(
+                    db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+                )
+                if not customer_data:
+                    pass
 
-        return JSONResponse(content={"success": True})
+                status = customer_data.get("status", None)
+                if (
+                    status != CustomerStatusData.ACTIVE
+                    and status != CustomerStatusData.FREE
+                ):
+                    await UpdateOneData(
+                        db.customers,
+                        {"_id": ObjectId(invoice_data["id_customer"])},
+                        {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+                    )
+                    await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+                notification_data = {
+                    "id_user": ObjectId(customer_data["id_user"]),
+                    "title": "Tagihan Telah Dibayar",
+                    "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
+                    "type": NotificationTypeData.OTHER.value,
+                    "is_read": 0,
+                    "created_at": GetCurrentDateTime(),
+                }
+                await CreateOneData(db.notifications, notification_data)
+
+        return callback_data
     except Exception as e:
-        print("error", e)
-        return JSONResponse(content={"Signature Not Found!"})
+        print("Error processing callback:", e)
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
