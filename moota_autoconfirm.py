@@ -16,6 +16,8 @@ from pymongo import MongoClient
 
 load_dotenv()
 
+AUTOCONFIRM_USER_ID = os.getenv("AUTOCONFIRM_USER_ID")
+AUTOCONFIRM_USER_EMAIL = os.getenv("AUTOCONFIRM_USER_EMAIL")
 AMRETA_DB_URI = os.getenv("AMRETA_DB_URI")
 AMRETA_DB_NAME = os.getenv("AMRETA_DB_NAME")
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
@@ -243,7 +245,7 @@ async def main():
                     "payment.paid_at": GetCurrentDateTime(),
                     "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice.get('due_date')))} (By Moota)",
                     "payment.confirmed_at": GetCurrentDateTime(),
-                    "payment.confirmed_by": "moota@gmail.com",
+                    "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
                 }
                 db.invoices.update_one({"_id": invoice["_id"]}, {"$set": confirm_data})
                 confirmed += 1
@@ -254,7 +256,7 @@ async def main():
                     "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice.get('service_number', '-')} a/n {invoice.get('name', '-')}, Periode {DateIDFormatter(str(invoice.get('due_date')))}",
                     "method": confirm_data["payment.method"],
                     "date": confirm_data["payment.paid_at"],
-                    "id_receiver": ObjectId("679c82f005a1aae3d2b43520"),
+                    "id_receiver": ObjectId(AUTOCONFIRM_USER_ID),
                     "created_at": GetCurrentDateTime(),
                 }
                 db.incomes.update_one(
