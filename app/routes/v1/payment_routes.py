@@ -1,4 +1,5 @@
 import base64
+import hmac
 import json
 import time
 from bson import ObjectId
@@ -43,6 +44,7 @@ from app.modules.telegram_message import SendTelegramPaymentMessage
 load_dotenv()
 
 # moota config
+MOOTA_CALLBACK_SECRET_KEY = os.getenv("MOOTA_CALLBACK_SECRET_KEY")
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
 # duitku config
@@ -260,6 +262,44 @@ async def request_confirm_payment(
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+
+@router.post("/moota/callback")
+async def moota_callback(
+    request: Request,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    try:
+        signature = request.headers.get("signature")
+        if not signature:
+            await CreateOneData(
+                db.check_moota, {"error": "Signature Tidak Ditemukan di Headers"}
+            )
+            raise HTTPException(
+                status_code=400, detail="Signature not found in headers"
+            )
+
+        body = await request.body()
+        calculated_signature = hmac.new(
+            MOOTA_CALLBACK_SECRET_KEY.encode("utf-8"),
+            body,
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac.compare_digest(calculated_signature, signature):
+            await CreateOneData(db.check_moota, {"error": "Signature Salah"})
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+        mutation_data = await request.json()
+        for mutation in mutation_data:
+            amount_str = mutation.get("amount", "")
+            amount = int(float(amount_str))
+            insert_data = mutation
+            insert_data["integer_amount"] = amount
+            await CreateOneData(db.check_moota, insert_data)
+    except Exception as e:
+        print(str(e))
+        await CreateOneData(db.check_moota, {"error": str(e)})
 
 
 @router.post("/virtual-account/add/{id_invoice}")
