@@ -333,7 +333,7 @@ async def get_ipaymu_channel():
             "timestamp": timestamp,
         }
         ipaymu_url = f"{IPAYMU_API_DOMAIN}/api/v2/payment-channels"
-        response = requests.get(ipaymu_url, headers=headers, data=data_body)
+        response = requests.get(ipaymu_url, headers=headers, data=data_body, timeout=60)
         response = response.json()
         channel_options = []
         for item in response.get("Data", []):
@@ -402,7 +402,9 @@ async def create_ipaymu_payment(
             "timestamp": timestamp,
         }
         ipaymu_url = f"{IPAYMU_API_DOMAIN}/api/v2/payment"
-        response = requests.post(ipaymu_url, headers=headers, data=data_body)
+        response = requests.post(
+            ipaymu_url, headers=headers, data=data_body, timeout=60
+        )
         response = response.json()
 
         payment_url = response.get("Data", {}).get("Url", None)
