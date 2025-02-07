@@ -278,9 +278,6 @@ async def moota_callback(
     try:
         signature = request.headers.get("signature")
         if not signature:
-            await CreateOneData(
-                db.check_moota, {"error": "Signature Tidak Ditemukan di Headers"}
-            )
             raise HTTPException(
                 status_code=400, detail="Signature not found in headers"
             )
@@ -293,19 +290,96 @@ async def moota_callback(
         ).hexdigest()
 
         if not hmac.compare_digest(calculated_signature, signature):
-            await CreateOneData(db.check_moota, {"error": "Signature Salah"})
             raise HTTPException(status_code=403, detail="Invalid signature")
 
         mutation_data = await request.json()
         for mutation in mutation_data:
             amount_str = mutation.get("amount", "")
             amount = int(float(amount_str))
-            insert_data = mutation
-            insert_data["integer_amount"] = amount
-            await CreateOneData(db.check_moota, insert_data)
+            unpaid_invoice = await GetAggregateData(
+                db.invoices,
+                [
+                    {
+                        "$match": {
+                            "status": InvoiceStatusData.UNPAID.value,
+                            "amount": amount,
+                        },
+                    }
+                ],
+            )
+            if len(unpaid_invoice) == 1:
+                invoice_data = unpaid_invoice[0]
+                result = await UpdateOneData(
+                    db.invoices,
+                    {"_id": ObjectId(invoice_data["_id"])},
+                    {
+                        "$set": {
+                            "status": InvoiceStatusData.PAID,
+                            "payment.method": PaymentMethodData.TRANSFER.value,
+                            "payment.paid_at": GetCurrentDateTime(),
+                            "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice_data.get('due_date')))} (By Moota)",
+                            "payment.confirmed_at": GetCurrentDateTime(),
+                            "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
+                        }
+                    },
+                    upsert=True,
+                )
+                if not result:
+                    pass
+
+                income_data = {
+                    "id_invoice": ObjectId(invoice_data["_id"]),
+                    "nominal": invoice_data.get("amount", 0),
+                    "category": "BAYAR TAGIHAN",
+                    "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
+                    "method": PaymentMethodData.TRANSFER.value,
+                    "date": GetCurrentDateTime(),
+                    "id_receiver": ObjectId(AUTOCONFIRM_USER_ID),
+                    "created_at": GetCurrentDateTime(),
+                }
+                await UpdateOneData(
+                    db.incomes,
+                    {"id_invoice": ObjectId(invoice_data["_id"])},
+                    {"$set": income_data},
+                    upsert=True,
+                )
+
+                await SendWhatsappPaymentSuccessMessage(db, invoice_data["_id"])
+                await SendTelegramPaymentMessage(db, invoice_data["_id"])
+
+                customer_data = await GetOneData(
+                    db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+                )
+                if not customer_data:
+                    pass
+
+                status = customer_data.get("status", None)
+                if (
+                    status != CustomerStatusData.ACTIVE
+                    and status != CustomerStatusData.FREE
+                ):
+                    await UpdateOneData(
+                        db.customers,
+                        {"_id": ObjectId(invoice_data["id_customer"])},
+                        {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+                    )
+                    await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+                notification_data = {
+                    "id_user": ObjectId(customer_data["id_user"]),
+                    "title": "Tagihan Telah Dibayar",
+                    "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
+                    "type": NotificationTypeData.OTHER.value,
+                    "is_read": 0,
+                    "created_at": GetCurrentDateTime(),
+                }
+                await CreateOneData(db.notifications, notification_data)
+
     except Exception as e:
         print(str(e))
-        await CreateOneData(db.check_moota, {"error": str(e)})
+        await CreateOneData(
+            db.logs_plugin, {"plugin": "Moota", "error_message": str(e)}
+        )
 
 
 @router.get("/ipaymu/channel")
@@ -410,6 +484,9 @@ async def create_ipaymu_payment(
         payment_url = response.get("Data", {}).get("Url", None)
         return JSONResponse(content={"payment_url": payment_url})
     except Exception as e:
+        await CreateOneData(
+            db.logs_plugin, {"plugin": "Ipaymu", "error_message": str(e)}
+        )
         raise HTTPException(
             status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}
         )
@@ -509,6 +586,9 @@ async def ipaymu_payment_callback(
 
         return JSONResponse(content={"message": "Callback Diterima"})
     except Exception as e:
+        await CreateOneData(
+            db.logs_plugin, {"plugin": "Ipaymu", "error_message": str(e)}
+        )
         raise HTTPException(
             status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}
         )
