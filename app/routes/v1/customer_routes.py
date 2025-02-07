@@ -563,6 +563,7 @@ async def check_customer_data(
             "gender": 1,
             "due_date": 1,
             "created_at": 1,
+            "registered_at": 1,
         },
     )
     if not customer_data:
