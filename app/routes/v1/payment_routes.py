@@ -43,6 +43,12 @@ from app.modules.telegram_message import SendTelegramPaymentMessage
 
 load_dotenv()
 
+# ipaymu config
+IPAYMU_API_DOMAIN = os.getenv("IPAYMU_API_DOMAIN")
+IPAYMU_VA = os.getenv("IPAYMU_VA")
+IPAYMU_API_TOKEN = os.getenv("IPAYMU_API_TOKEN")
+IPAYMU_RETURN_URL = os.getenv("IPAYMU_RETURN_URL")
+IPAYMU_CALLBACK_URL = os.getenv("IPAYMU_CALLBACK_URL")
 # moota config
 MOOTA_CALLBACK_SECRET_KEY = os.getenv("MOOTA_CALLBACK_SECRET_KEY")
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
@@ -300,6 +306,210 @@ async def moota_callback(
     except Exception as e:
         print(str(e))
         await CreateOneData(db.check_moota, {"error": str(e)})
+
+
+@router.get("/ipaymu/channel")
+async def get_ipaymu_channel():
+    try:
+        timestamp = GetCurrentDateTime().strftime("%Y%m%d%H%M%S")
+        body = {}
+
+        data_body = json.dumps(body)
+        data_body = json.dumps(body, separators=(",", ":"))
+        encrypt_body = hashlib.sha256(data_body.encode()).hexdigest()
+        string_to_sign = "{}:{}:{}:{}".format(
+            "GET", IPAYMU_VA, encrypt_body, IPAYMU_API_TOKEN
+        )
+        signature = (
+            hmac.new(IPAYMU_API_TOKEN.encode(), string_to_sign.encode(), hashlib.sha256)
+            .hexdigest()
+            .lower()
+        )
+        headers = {
+            "Content-type": "application/json",
+            "Accept": "application/json",
+            "signature": signature,
+            "va": IPAYMU_VA,
+            "timestamp": timestamp,
+        }
+        ipaymu_url = f"{IPAYMU_API_DOMAIN}/api/v2/payment-channels"
+        response = requests.get(ipaymu_url, headers=headers, data=data_body)
+        response = response.json()
+        channel_options = []
+        for item in response.get("Data", []):
+            if item.get("Code") in ["cstore", "va"]:
+                channel_options += item.get("Channels", [])
+
+        return JSONResponse(content={"channel_options": channel_options})
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}
+        )
+
+
+@router.post("/ipaymu/add/{id_invoice}")
+async def create_ipaymu_payment(
+    id_invoice: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    try:
+        exist_invoice = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+        if not exist_invoice:
+            raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+        customer_data = await GetOneData(
+            db.customers,
+            {"_id": ObjectId(exist_invoice["id_customer"])},
+            {
+                "name": 1,
+                "email": 1,
+                "phone_number": 1,
+            },
+        )
+        if customer_data:
+            exist_invoice["customer"] = customer_data
+
+        timestamp = GetCurrentDateTime().strftime("%Y%m%d%H%M%S")
+        body = {
+            "product": ["Paket Langganan Amreta Net"],
+            "qty": ["1"],
+            "price": [exist_invoice.get("amount", 0)],
+            "amount": exist_invoice.get("amount", 0),
+            "returnUrl": IPAYMU_RETURN_URL,
+            "notifyUrl": IPAYMU_CALLBACK_URL,
+            "referenceId": exist_invoice.get("_id"),
+            "buyerName": exist_invoice.get("customer", {}).get("name", ""),
+            "buyerPhone": f"0{exist_invoice.get('customer', {}).get('phone_number', '')}",
+            "buyerEmail": exist_invoice.get("customer", {}).get("email", ""),
+        }
+
+        data_body = json.dumps(body)
+        data_body = json.dumps(body, separators=(",", ":"))
+        encrypt_body = hashlib.sha256(data_body.encode()).hexdigest()
+        string_to_sign = "{}:{}:{}:{}".format(
+            "POST", IPAYMU_VA, encrypt_body, IPAYMU_API_TOKEN
+        )
+        signature = (
+            hmac.new(IPAYMU_API_TOKEN.encode(), string_to_sign.encode(), hashlib.sha256)
+            .hexdigest()
+            .lower()
+        )
+        headers = {
+            "Content-type": "application/json",
+            "Accept": "application/json",
+            "signature": signature,
+            "va": IPAYMU_VA,
+            "timestamp": timestamp,
+        }
+        ipaymu_url = f"{IPAYMU_API_DOMAIN}/api/v2/payment"
+        response = requests.post(ipaymu_url, headers=headers, data=data_body)
+        response = response.json()
+
+        payment_url = response.get("Data", {}).get("Url", None)
+        return JSONResponse(content={"payment_url": payment_url})
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}
+        )
+
+
+@router.post("/ipaymu/callback")
+async def ipaymu_payment_callback(
+    request: Request,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    try:
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail={"message": "Body is Not JSON"})
+
+        body_str = body.decode("utf-8")
+        if body_str.startswith("{"):
+            callback_data = json.loads(body_str)
+        else:
+            parsed_data = urllib.parse.parse_qs(body_str)
+            callback_data = {key: value[0] for key, value in parsed_data.items()}
+
+        status_code = callback_data.get("status_code", "0")
+        id_invoice = callback_data.get("reference_id", None)
+        channel = callback_data.get("payment_channel", "")
+        if status_code == "1" and id_invoice:
+            invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+            if not invoice_data:
+                pass
+
+            result = await UpdateOneData(
+                db.invoices,
+                {"_id": ObjectId(id_invoice)},
+                {
+                    "$set": {
+                        "status": InvoiceStatusData.PAID,
+                        "payment.method": PaymentMethodData.TRANSFER.value,
+                        "payment.paid_at": GetCurrentDateTime(),
+                        "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice_data.get('due_date')))} (By IPaymu)",
+                        "payment.confirmed_at": GetCurrentDateTime(),
+                        "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
+                        "payment.channel": channel,
+                    }
+                },
+                upsert=True,
+            )
+            if not result:
+                pass
+
+            income_data = {
+                "id_invoice": ObjectId(id_invoice),
+                "nominal": invoice_data.get("amount", 0),
+                "category": "BAYAR TAGIHAN",
+                "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
+                "method": PaymentMethodData.TRANSFER.value,
+                "date": GetCurrentDateTime(),
+                "id_receiver": ObjectId(AUTOCONFIRM_USER_ID),
+                "created_at": GetCurrentDateTime(),
+            }
+            await UpdateOneData(
+                db.incomes,
+                {"id_invoice": ObjectId(id_invoice)},
+                {"$set": income_data},
+                upsert=True,
+            )
+
+            await SendWhatsappPaymentSuccessMessage(db, id_invoice)
+            await SendTelegramPaymentMessage(db, id_invoice)
+
+            customer_data = await GetOneData(
+                db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+            )
+            if not customer_data:
+                pass
+
+            status = customer_data.get("status", None)
+            if (
+                status != CustomerStatusData.ACTIVE
+                and status != CustomerStatusData.FREE
+            ):
+                await UpdateOneData(
+                    db.customers,
+                    {"_id": ObjectId(invoice_data["id_customer"])},
+                    {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+                )
+                await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+            notification_data = {
+                "id_user": ObjectId(customer_data["id_user"]),
+                "title": "Tagihan Telah Dibayar",
+                "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
+                "type": NotificationTypeData.OTHER.value,
+                "is_read": 0,
+                "created_at": GetCurrentDateTime(),
+            }
+            await CreateOneData(db.notifications, notification_data)
+
+        return JSONResponse(content={"message": "Callback Diterima"})
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}
+        )
 
 
 @router.post("/virtual-account/add/{id_invoice}")
