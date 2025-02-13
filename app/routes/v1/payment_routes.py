@@ -320,6 +320,7 @@ async def moota_callback(
                             "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice_data.get('due_date')))} (By Moota)",
                             "payment.confirmed_at": GetCurrentDateTime(),
                             "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
+                            "payment.from": "Moota Callback",
                         }
                     },
                     upsert=True,

@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import datetime, timedelta
 import hashlib
 from pathlib import Path
@@ -98,26 +99,31 @@ def GetDueDateRange(gap: int):
     current_date = GetCurrentDateTime()
     target_date = current_date + timedelta(days=gap)
 
-    current_month = current_date.month
     current_year = current_date.year
+    current_month = current_date.month
+    current_day = current_date.day
 
     target_month = target_date.month
+    target_day = target_date.day
+    last_day_of_current_month = monthrange(current_year, current_month)[1]
 
-    last_day_of_current_month = (
-        datetime(current_year, current_month + 1, 1) - timedelta(days=1)
-    ).day
-
-    current_month_dates = [
-        str(day).zfill(2)
-        for day in range(current_date.day, last_day_of_current_month + 1)
-    ]
-
-    next_month_dates = []
-    if target_month != current_month:
-        days_in_next_month = target_date.day
-        next_month_dates = [
-            str(day).zfill(2) for day in range(1, days_in_next_month + 1)
+    if target_month == current_month:
+        current_month_dates = [
+            str(day).zfill(2) for day in range(current_day, target_day + 1)
         ]
+        next_month_dates = []
+    else:
+        current_month_dates = [
+            str(day).zfill(2)
+            for day in range(current_day, last_day_of_current_month + 1)
+        ]
+        next_month_dates = [str(day).zfill(2) for day in range(1, target_day + 1)]
+
+    if len(current_month_dates) > 0:
+        last_current_date = int(current_month_dates[-1])
+        if len(next_month_dates) > 0:
+            for last_current_date in range(last_current_date + 1, 32):
+                current_month_dates.append(str(last_current_date).zfill(2))
 
     return current_month_dates, next_month_dates
 

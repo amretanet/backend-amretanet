@@ -1,4 +1,5 @@
 import base64
+from calendar import monthrange
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from bson import ObjectId
@@ -157,6 +158,9 @@ async def generate_invoice(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
+    max_date_of_month = monthrange(
+        GetCurrentDateTime().year, GetCurrentDateTime().month
+    )[1]
     current_month_dates, next_month_dates = GetDueDateRange(10)
     query = {
         "status": {
@@ -285,9 +289,12 @@ async def generate_invoice(
     current_date = GetCurrentDateTime()
     next_month = current_date + relativedelta(months=1)
     for customer in customer_data:
+        customer_due_date = customer.get("due_date")
+        if int(customer_due_date) > max_date_of_month:
+            customer_due_date = str(max_date_of_month).zfill(2)
         target_month = current_date.strftime("%m")
         target_year = current_date.strftime("%Y")
-        if customer.get("due_date") in next_month_dates:
+        if customer_due_date in next_month_dates:
             target_month = next_month.strftime("%m")
             target_year = next_month.strftime("%Y")
 
@@ -327,7 +334,7 @@ async def generate_invoice(
             "service_number": customer["service_number"],
             "package": customer["package"],
             "due_date": datetime.strptime(
-                f"{target_year}-{target_month}-{customer['due_date']} 23:59:59",
+                f"{target_year}-{target_month}-{customer_due_date} 23:59:59",
                 "%Y-%m-%d %H:%M:%S",
             ),
             "add_on_packages": customer["add_on_packages"],
