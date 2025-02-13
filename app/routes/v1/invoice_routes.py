@@ -690,6 +690,9 @@ async def create_invoice(
     if exist_invoice:
         raise HTTPException(status_code=400, detail={"message": EXIST_DATA_MESSAGE})
 
+    max_date_of_month = monthrange(
+        GetCurrentDateTime().year, GetCurrentDateTime().month
+    )[1]
     pipeline = []
     query = {"_id": ObjectId(payload["id_customer"])}
 
@@ -801,6 +804,10 @@ async def create_invoice(
     invoice_exist = 0
     invoice_created = 0
     for customer in customer_data:
+        customer_due_date = customer.get("due_date")
+        if int(customer_due_date) > max_date_of_month:
+            customer_due_date = str(max_date_of_month).zfill(2)
+
         unique_code = 0
         last_unique_code = await GetOneData(
             db.configurations, {"type": "INVOICE_UNIQUE_CODE"}
@@ -827,7 +834,7 @@ async def create_invoice(
             "service_number": customer["service_number"],
             "package": customer["package"],
             "due_date": datetime.strptime(
-                f"{payload['year']}-{payload['month']}-{customer['due_date']} 23:59:59",
+                f"{payload['year']}-{payload['month']}-{customer_due_date} 23:59:59",
                 "%Y-%m-%d %H:%M:%S",
             ),
             "add_on_packages": customer["add_on_packages"],
