@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from app.models.generals import GenderData
 from enum import Enum
 
@@ -24,6 +24,14 @@ CustomerProjections = {
 
 
 # schemas
+class CustomerSortingsData(str, Enum):
+    NAME = "name"
+    SERVICE_NUMBER = "service_number"
+    ODP_NAME = "odp_name"
+    DUE_DATE = "due_date"
+    REGISTERED_AT = "registered_at"
+
+
 class CustomerStatusData(int, Enum):
     NONACTIVE = 0
     ACTIVE = 1
@@ -76,6 +84,11 @@ class CustomerInsertData(BaseModel):
     id_odp: str
     port_odp: int
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def capitalize_name(cls, value: str) -> str:
+        return value.title() if isinstance(value, str) else value
+
 
 class CustomerUpdateData(BaseModel):
     service_number: int
@@ -100,6 +113,11 @@ class CustomerUpdateData(BaseModel):
     id_odp: str
     port_odp: int
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def capitalize_name(cls, value: str) -> str:
+        return value.title() if isinstance(value, str) else value
+
 
 class CustomerRegisterData(BaseModel):
     name: str
@@ -111,3 +129,8 @@ class CustomerRegisterData(BaseModel):
     referral: Optional[str] = None
     id_package: str
     instalation_date: Optional[str] = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def capitalize_name(cls, value: str) -> str:
+        return value.title() if isinstance(value, str) else value

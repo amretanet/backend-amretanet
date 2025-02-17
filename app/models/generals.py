@@ -10,6 +10,11 @@ class Pagination(BaseModel):
     count: int
 
 
+class SortingDirection(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
 class GenderData(str, Enum):
     MALE = "L"
     FEMALE = "P"

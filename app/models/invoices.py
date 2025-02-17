@@ -4,6 +4,13 @@ from pydantic import BaseModel
 
 
 # schemas
+class InvoiceSortingsData(str, Enum):
+    NAME = "name"
+    SERVICE_NUMBER = "service_number"
+    AMOUNT = "amount"
+    DUE_DATE = "due_date"
+
+
 class InvoiceStatusData(str, Enum):
     PAID = "PAID"
     UNPAID = "UNPAID"

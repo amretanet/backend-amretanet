@@ -4,12 +4,13 @@ from fastapi.responses import JSONResponse
 from app.models.customers import (
     CustomerInsertData,
     CustomerRegisterData,
+    CustomerSortingsData,
     CustomerStatusData,
     CustomerUpdateData,
     CustomerProjections,
 )
 from app.models.notifications import NotificationTypeData
-from app.models.generals import Pagination
+from app.models.generals import Pagination, SortingDirection
 from app.models.tickets import TicketStatusData, TicketTypeData
 from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
@@ -64,6 +65,8 @@ async def get_customers(
     referral: str = None,
     page: int = 1,
     items: int = 10,
+    sort_key: CustomerSortingsData = CustomerSortingsData.SERVICE_NUMBER.value,
+    sort_direction: SortingDirection = SortingDirection.ASC.value,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -184,7 +187,7 @@ async def get_customers(
         }
     )
 
-    pipeline.append({"$sort": {"service_number": 1}})
+    pipeline.append({"$sort": {sort_key: 1 if sort_direction == "asc" else -1}})
     customer_data, count = await GetManyData(
         db.customers, pipeline, CustomerProjections, {"page": page, "items": items}
     )
@@ -194,6 +197,127 @@ async def get_customers(
         content={
             "customer_data": customer_data,
             "pagination_info": pagination_info,
+        }
+    )
+
+
+@router.get("/billing-count")
+async def get_customer_billing_count(
+    key: str = None,
+    id_odp: str = None,
+    id_router: str = None,
+    status: int = None,
+    referral: str = None,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = []
+    query = {}
+    if key:
+        query["$or"] = [
+            {"name": {"$regex": key, "$options": "i"}},
+            {
+                "$expr": {
+                    "$regexMatch": {
+                        "input": {"$toString": "$service_number"},
+                        "regex": key,
+                        "options": "i",
+                    }
+                }
+            },
+        ]
+    if id_odp:
+        query["id_odp"] = ObjectId(id_odp)
+    if id_router:
+        query["id_router"] = ObjectId(id_router)
+    if status is not None:
+        query["status"] = status
+    else:
+        query["status"] = {
+            "$in": [CustomerStatusData.ACTIVE.value, CustomerStatusData.ISOLIR.value]
+        }
+    if referral:
+        query["referral"] = referral
+
+    # add filter query
+    pipeline.append({"$match": query})
+
+    # add join id package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "let": {"idPackage": "$id_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
+                    {"$limit": 1},
+                ],
+                "as": "package",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "package_billing": {
+                    "$ifNull": [{"$arrayElemAt": ["$package.price.regular", 0]}, 0]
+                }
+            }
+        }
+    )
+
+    # add join id add-on package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "let": {"idAddOnPackage": "$id_add_on_package"},
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
+                            }
+                        }
+                    }
+                ],
+                "as": "add_on_packages",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "add_on_billing": {
+                    "$sum": {
+                        "$map": {
+                            "input": "$add_on_packages",
+                            "as": "add_on",
+                            "in": {"$ifNull": ["$$add_on.price.regular", 0]},
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    # counting package & add-on package price query
+    pipeline.append(
+        {
+            "$addFields": {
+                "billing": {"$add": ["$package_billing", "$add_on_billing"]}
+            },
+        }
+    )
+
+    pipeline.append({"$group": {"_id": None, "count": {"$sum": "$billing"}}})
+    billing_count = await GetAggregateData(db.customers, pipeline, {"count": 1})
+
+    return JSONResponse(
+        content={
+            "billing_count": billing_count[0].get("count", 0)
+            if len(billing_count) > 0
+            else 0
         }
     )
 

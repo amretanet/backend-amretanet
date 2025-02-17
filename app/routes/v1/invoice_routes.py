@@ -5,9 +5,14 @@ from dateutil.relativedelta import relativedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
-from app.models.invoices import InvoiceInsertData, InvoiceStatusData, InvoiceUpdateData
+from app.models.invoices import (
+    InvoiceInsertData,
+    InvoiceSortingsData,
+    InvoiceStatusData,
+    InvoiceUpdateData,
+)
 from app.models.payments import PaymentMethodData
-from app.models.generals import Pagination
+from app.models.generals import Pagination, SortingDirection
 from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
@@ -59,6 +64,8 @@ async def get_invoice(
     status: str = None,
     page: int = 1,
     items: int = 1,
+    sort_key: InvoiceSortingsData = InvoiceSortingsData.DUE_DATE.value,
+    sort_direction: SortingDirection = SortingDirection.ASC.value,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -106,38 +113,39 @@ async def get_invoice(
             }
         },
         {"$unwind": "$customer"},
-        {
-            "$addFields": {
-                "status_priority": {
-                    "$switch": {
-                        "branches": [
-                            {
-                                "case": {
-                                    "$eq": [
-                                        "$status",
-                                        InvoiceStatusData.UNPAID.value,
-                                    ]
-                                },
-                                "then": 1,
-                            },
-                            {
-                                "case": {
-                                    "$eq": ["$status", InvoiceStatusData.PENDING.value]
-                                },
-                                "then": 2,
-                            },
-                        ],
-                        "default": 3,
-                    }
-                }
-            }
-        },
-        {
-            "$sort": {
-                "status_priority": 1,
-                "due_date": 1,
-            }
-        },
+        # {
+        #     "$addFields": {
+        #         "status_priority": {
+        #             "$switch": {
+        #                 "branches": [
+        #                     {
+        #                         "case": {
+        #                             "$eq": [
+        #                                 "$status",
+        #                                 InvoiceStatusData.UNPAID.value,
+        #                             ]
+        #                         },
+        #                         "then": 1,
+        #                     },
+        #                     {
+        #                         "case": {
+        #                             "$eq": ["$status", InvoiceStatusData.PENDING.value]
+        #                         },
+        #                         "then": 2,
+        #                     },
+        #                 ],
+        #                 "default": 3,
+        #             }
+        #         }
+        #     }
+        # },
+        # {
+        #     "$sort": {
+        #         "status_priority": 1,
+        #         "due_date": 1,
+        #     }
+        # },
+        {"$sort": {sort_key: 1 if sort_direction == "asc" else -1}},
     ]
 
     invoice_data, count = await GetManyData(
