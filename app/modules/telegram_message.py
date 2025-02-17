@@ -16,6 +16,10 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_INSTALLATION_THREAD_ID = os.getenv("TELEGRAM_INSTALLATION_THREAD_ID")
 TELEGRAM_MAINTENANCE_THREAD_ID = os.getenv("TELEGRAM_MAINTENANCE_THREAD_ID")
 TELEGRAM_PAYMENT_THREAD_ID = os.getenv("TELEGRAM_PAYMENT_THREAD_ID")
+TELEGRAM_MANAGEMENT_CHAT_ID = os.getenv("TELEGRAM_MANAGEMENT_CHAT_ID")
+TELEGRAM_MANAGEMENT_PAYMENT_THREAD_ID = os.getenv(
+    "TELEGRAM_MANAGEMENT_PAYMENT_THREAD_ID"
+)
 
 
 async def CreateTelegramErrorNotification(db, description: str):
@@ -291,8 +295,8 @@ async def SendTelegramPaymentMessage(db, id_invoice):
             )
 
         params = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "message_thread_id": TELEGRAM_PAYMENT_THREAD_ID,
+            "chat_id": TELEGRAM_MANAGEMENT_CHAT_ID,
+            "message_thread_id": TELEGRAM_MANAGEMENT_PAYMENT_THREAD_ID,
             "text": v_message,
             "parse_mode": "Markdown",
         }
