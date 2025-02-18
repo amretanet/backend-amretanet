@@ -57,7 +57,7 @@ def CreatePDFHeader(pdf: FPDF, show_line: bool = True):
     pdf.cell(
         0,
         10,
-        "whatsapp: 08999094340 | email: sandi@amreta.net",
+        "whatsapp: 085159979915 | email: customercare@amretanet.com",
         border=False,
         ln=True,
         align="C",
@@ -290,12 +290,12 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     pdf.set_font("Arial", "", 12)
     pdf.cell(30, 7, "Email", border=False, ln=False, align="L")
     pdf.cell(2, 7, ":", border=False, ln=False, align="L")
-    pdf.cell(2, 7, "sandi@amreta.net", border=False, ln=False, align="L")
+    pdf.cell(2, 7, "customercare@amretanet.com", border=False, ln=False, align="L")
     pdf.ln(7)
     pdf.set_font("Arial", "", 12)
     pdf.cell(30, 7, "Whatsapp", border=False, ln=False, align="L")
     pdf.cell(2, 7, ":", border=False, ln=False, align="L")
-    pdf.cell(2, 7, "08999094340", border=False, ln=False, align="L")
+    pdf.cell(2, 7, "085159979915", border=False, ln=False, align="L")
     # footer
     pdf.set_y(-30)
     pdf.set_font("Arial", "BI", 12)
