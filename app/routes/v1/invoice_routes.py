@@ -486,7 +486,7 @@ async def invoice_whatsapp_created(
         from_date = GetCurrentDateTime().replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        to_date = (GetCurrentDateTime() + timedelta(days=5)).replace(
+        to_date = (GetCurrentDateTime() + timedelta(days=4)).replace(
             hour=23, minute=59, second=59, microsecond=0
         )
         invoice_data = await GetAggregateData(
@@ -529,6 +529,7 @@ async def invoice_whatsapp_reminder(
         to_date = GetCurrentDateTime().replace(
             hour=23, minute=59, second=59, microsecond=0
         )
+
         invoice_data = await GetAggregateData(
             db.invoices,
             [
