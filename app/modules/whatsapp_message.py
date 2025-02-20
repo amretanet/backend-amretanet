@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+WHATSAPP_GATEWAY_URL = os.getenv("WHATSAPP_GATEWAY_URL")
 WHATSAPP_ADMIN_NUMBER = os.getenv("WHATSAPP_ADMIN_NUMBER")
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
@@ -58,7 +59,7 @@ async def SendWhatsappMessage(destination_number, message):
         "number": f"62{destination_number}",
         "message": message,
     }
-    whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+    whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
     response = requests.post(whatsapp_api_url, json=params)
     return response
 
@@ -99,7 +100,7 @@ async def SendWhatsappCustomerRegisterMessage(db, id_customer):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -133,7 +134,7 @@ async def SendWhatsappCustomerActivatedMessage(db, id_customer):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -183,7 +184,7 @@ async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -227,7 +228,7 @@ async def SendWhatsappPaymentReminderMessage(db, id_invoice):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -271,7 +272,7 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -313,7 +314,7 @@ async def SendWhatsappIsolirMessage(db, id_invoice):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -365,7 +366,7 @@ async def SendWhatsappPaymentSuccessMessage(db, id_invoice):
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
@@ -429,7 +430,7 @@ async def SendWhatsappTicketOpenMessage(
                 "number": f"62{number}",
                 "message": v_message,
             }
-            whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+            whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
             requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         print(e)
@@ -488,7 +489,7 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
                 "number": f"62{number}",
                 "message": v_message,
             }
-            whatsapp_api_url = "https://wa7.amretanet.my.id/send-message"
+            whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
             requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
