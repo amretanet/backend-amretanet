@@ -25,12 +25,14 @@ from app.modules.crud_operations import (
 )
 from app.modules.pdf import CreateInvoicePDF, CreateInvoiceThermal
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
+from app.modules.telegram_message import SendTelegramPaymentMessage
 from app.modules.whatsapp_message import (
     SendWhatsappCustomerActivatedMessage,
     SendWhatsappIsolirMessage,
     SendWhatsappPaymentCreatedMessage,
     SendWhatsappPaymentOverdueMessage,
     SendWhatsappPaymentReminderMessage,
+    SendWhatsappPaymentSuccessMessage,
 )
 from app.models.customers import CustomerStatusData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
@@ -1091,6 +1093,11 @@ async def update_invoice_status(
     result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    if status == InvoiceStatusData.PAID.value:
+        for id in id_list:
+            await SendWhatsappPaymentSuccessMessage(db, id)
+            await SendTelegramPaymentMessage(db, id)
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
