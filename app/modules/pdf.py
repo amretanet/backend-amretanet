@@ -309,17 +309,55 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
     )
 
 
-def CreateThermalInvoiceBody(pdf: FPDF, data):
-    pdf.set_font("Arial", "", 16)
-    pdf.set_y(60)
-    pdf.cell(0, 8, "==========================================", ln=True, align="C")
-    pdf.set_y(65)
+def CreateThermalHeader(pdf: FPDF, show_line: bool = True):
+    logo_path = urljoin(PROJECT_PATH, "utils/short-logo.png")
+    # convert logo
+    try:
+        temp_logo_path = "/tmp/converted_image.png"
+        ConvertImage(logo_path, temp_logo_path)
+        logo_path = temp_logo_path
+    except Exception as e:
+        raise RuntimeError(f"Error converting PNG: {e}")
+
+    # add header
+    pdf.image(logo_path, x=95, y=10, w=20, h=0)
+    pdf.set_y(33)
     pdf.set_font("Arial", "B", 20)
+    pdf.cell(0, 10, "AMRETA NETWORK", border=False, ln=True, align="C")
+    pdf.set_y(40)
+    pdf.cell(0, 10, "Solusi Internet Unlimited", border=False, ln=True, align="C")
+    pdf.set_y(47)
+    pdf.set_font("Arial", "", 14)
+    pdf.cell(
+        0,
+        10,
+        "whatsapp: 085159979915 | email: customercare@amretanet.com",
+        border=False,
+        ln=True,
+        align="C",
+    )
+    pdf.set_y(52)
+    pdf.cell(
+        0,
+        10,
+        "Cipacing, Jatinangor",
+        border=False,
+        ln=True,
+        align="C",
+    )
+
+
+def CreateThermalInvoiceBody(pdf: FPDF, data):
+    pdf.set_font("Arial", "", 20)
+    pdf.set_y(65)
+    pdf.cell(0, 8, "==============================================", ln=True, align="C")
+    pdf.set_y(70)
+    pdf.set_font("Arial", "B", 25)
     pdf.cell(0, 10, "Struk Pembayaran Tagihan", ln=True, align="C")
-    pdf.set_y(73)
-    pdf.set_font("Arial", "", 16)
-    pdf.cell(0, 8, "==========================================", ln=True, align="C")
-    pdf.set_x(35)
+    pdf.set_y(78)
+    pdf.set_font("Arial", "", 20)
+    pdf.cell(0, 8, "==============================================", ln=True, align="C")
+    pdf.set_x(10)
     pdf.cell(
         0,
         8,
@@ -327,11 +365,11 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         ln=True,
         align="L",
     )
-    pdf.set_x(35)
+    pdf.set_x(10)
     pdf.cell(
         0, 8, f"Nama                     : {data.get('name', '-')}", ln=True, align="L"
     )
-    pdf.set_x(35)
+    pdf.set_x(10)
     pdf.cell(
         0,
         8,
@@ -339,7 +377,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         ln=True,
         align="L",
     )
-    pdf.set_x(35)
+    pdf.set_x(10)
     pdf.cell(
         0,
         8,
@@ -347,7 +385,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         ln=True,
         align="L",
     )
-    pdf.set_x(35)
+    pdf.set_x(10)
     pdf.cell(
         0,
         8,
@@ -355,28 +393,28 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         ln=True,
         align="L",
     )
-    pdf.cell(0, 8, "==========================================", ln=True, align="C")
-    pdf.set_font("Arial", "B", 20)
+    pdf.cell(0, 8, "==============================================", ln=True, align="C")
+    pdf.set_font("Arial", "B", 25)
     pdf.cell(0, 12, "Informasi Paket", ln=True, align="C")
-    pdf.set_x(35)
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(80, 8, "Nama Paket", border=False, ln=False, align="L")
-    pdf.cell(60, 8, "Harga", border=False, ln=True, align="R")
+    pdf.set_x(10)
+    pdf.set_font("Arial", "B", 18)
+    pdf.cell(110, 8, "Nama Paket", border=False, ln=False, align="L")
+    pdf.cell(80, 8, "Harga", border=False, ln=True, align="R")
     package_items = data.get("package", []) + data.get("add_on_packages", [])
     for index, item in enumerate(package_items):
-        pdf.set_font("Arial", "", 16)
-        pdf.set_x(35)
-        pdf.cell(80, 8, item.get("name", "-"), border=False, ln=False, align="L")
+        pdf.set_font("Arial", "", 20)
+        pdf.set_x(10)
+        pdf.cell(110, 8, item.get("name", "-"), border=False, ln=False, align="L")
         pdf.cell(
-            60,
+            80,
             8,
             f"Rp{ThousandSeparator(item.get('price', 0).get('regular', 0))}",
             border=False,
             ln=True,
             align="R",
         )
-    pdf.cell(0, 8, "==========================================", ln=True, align="C")
-    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 8, "==============================================", ln=True, align="C")
+    pdf.set_font("Arial", "B", 18)
     subtotal = int(data.get("package_amount", 0)) + int(
         data.get("add_on_package_amount", 0)
     )
@@ -404,11 +442,11 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         ln=True,
         align="C",
     )
-    pdf.set_font("Arial", "", 16)
-    pdf.cell(0, 8, "==========================================", ln=True, align="C")
+    pdf.set_font("Arial", "", 20)
+    pdf.cell(0, 8, "==============================================", ln=True, align="C")
     pdf.cell(0, 8, "~Terimakasih~", ln=True, align="C")
     pdf.cell(0, 8, "Amreta Network", ln=True, align="C")
-    pdf.cell(0, 8, "==========================================", ln=True, align="C")
+    pdf.cell(0, 8, "==============================================", ln=True, align="C")
 
 
 def CreateInvoicePDF(data: list) -> BytesIO:
@@ -433,11 +471,11 @@ def CreateInvoicePDF(data: list) -> BytesIO:
 
 def CreateInvoiceThermal(data: list):
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=5)
     for item in data:
         pdf.add_page()
         # create header
-        CreatePDFHeader(pdf, False)
+        CreateThermalHeader(pdf, False)
         # create body
         CreateThermalInvoiceBody(pdf, item)
 
