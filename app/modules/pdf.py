@@ -310,105 +310,105 @@ def CreatePDFInvoiceBody(pdf: FPDF, data):
 
 
 def CreateThermalInvoiceBody(pdf: FPDF, data):
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("Arial", "", 16)
     pdf.set_y(60)
-    pdf.cell(0, 6, "========================================", ln=True, align="C")
+    pdf.cell(0, 8, "==========================================", ln=True, align="C")
     pdf.set_y(65)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, "Struk Pembayaran Tagihan", ln=True, align="C")
-    pdf.set_y(70)
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 6, "========================================", ln=True, align="C")
-    pdf.set_x(65)
+    pdf.set_font("Arial", "B", 20)
+    pdf.cell(0, 10, "Struk Pembayaran Tagihan", ln=True, align="C")
+    pdf.set_y(73)
+    pdf.set_font("Arial", "", 16)
+    pdf.cell(0, 8, "==========================================", ln=True, align="C")
+    pdf.set_x(35)
     pdf.cell(
         0,
-        6,
+        8,
         f"Nomor Layanan     : {str(data.get('service_number', '-'))}",
         ln=True,
         align="L",
     )
-    pdf.set_x(65)
+    pdf.set_x(35)
     pdf.cell(
-        0, 6, f"Nama                     : {data.get('name', '-')}", ln=True, align="L"
+        0, 8, f"Nama                     : {data.get('name', '-')}", ln=True, align="L"
     )
-    pdf.set_x(65)
+    pdf.set_x(35)
     pdf.cell(
         0,
-        6,
+        8,
         f"Status Tagihan      : {PaymentStatusFormatter(data.get('status', 'PAID'))}",
         ln=True,
         align="L",
     )
-    pdf.set_x(65)
+    pdf.set_x(35)
     pdf.cell(
         0,
-        6,
+        8,
         f"Jatuh Tempo         : {DateIDFormatter(data.get('due_date', None))}",
         ln=True,
         align="L",
     )
-    pdf.set_x(65)
+    pdf.set_x(35)
     pdf.cell(
         0,
-        6,
+        8,
         f"Dicetak Pada         : {DateIDFormatter(str(GetCurrentDateTime()))}",
         ln=True,
         align="L",
     )
-    pdf.cell(0, 6, "========================================", ln=True, align="C")
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, "Informasi Paket", ln=True, align="C")
-    pdf.set_x(65)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(50, 6, "Nama Paket", border=False, ln=False, align="L")
-    pdf.cell(30, 6, "Harga", border=False, ln=True, align="R")
+    pdf.cell(0, 8, "==========================================", ln=True, align="C")
+    pdf.set_font("Arial", "B", 20)
+    pdf.cell(0, 12, "Informasi Paket", ln=True, align="C")
+    pdf.set_x(35)
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(80, 8, "Nama Paket", border=False, ln=False, align="L")
+    pdf.cell(60, 8, "Harga", border=False, ln=True, align="R")
     package_items = data.get("package", []) + data.get("add_on_packages", [])
     for index, item in enumerate(package_items):
-        pdf.set_font("Arial", "", 10)
-        pdf.set_x(65)
-        pdf.cell(50, 6, item.get("name", "-"), border=False, ln=False, align="L")
+        pdf.set_font("Arial", "", 16)
+        pdf.set_x(35)
+        pdf.cell(80, 8, item.get("name", "-"), border=False, ln=False, align="L")
         pdf.cell(
-            30,
-            6,
+            60,
+            8,
             f"Rp{ThousandSeparator(item.get('price', 0).get('regular', 0))}",
             border=False,
             ln=True,
             align="R",
         )
-    pdf.cell(0, 6, "========================================", ln=True, align="C")
-    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 8, "==========================================", ln=True, align="C")
+    pdf.set_font("Arial", "B", 16)
     subtotal = int(data.get("package_amount", 0)) + int(
         data.get("add_on_package_amount", 0)
     )
-    pdf.cell(0, 6, f"Sub Total : Rp{ThousandSeparator(subtotal)}", ln=True, align="C")
+    pdf.cell(0, 8, f"Sub Total : Rp{ThousandSeparator(subtotal)}", ln=True, align="C")
     if "paid_leave_discount" in data:
         pdf.cell(
             0,
-            6,
+            8,
             f"Pengurangan Biaya Cuti: Rp{ThousandSeparator(data.get('paid_leave_discount', 0))}",
             ln=True,
             align="C",
         )
-    pdf.cell(0, 6, f"PPN : Rp{ThousandSeparator(data.get('ppn'))}", ln=True, align="C")
+    pdf.cell(0, 8, f"PPN : Rp{ThousandSeparator(data.get('ppn'))}", ln=True, align="C")
     pdf.cell(
         0,
-        6,
+        8,
         f"Kode Unik : {ThousandSeparator(data.get('unique_code'))}",
         ln=True,
         align="C",
     )
     pdf.cell(
         0,
-        6,
+        8,
         f"Total Tagihan : Rp{ThousandSeparator(data.get('amount'))}",
         ln=True,
         align="C",
     )
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 6, "========================================", ln=True, align="C")
-    pdf.cell(0, 6, "~Terimakasih~", ln=True, align="C")
-    pdf.cell(0, 6, "Amreta Network", ln=True, align="C")
-    pdf.cell(0, 6, "========================================", ln=True, align="C")
+    pdf.set_font("Arial", "", 16)
+    pdf.cell(0, 8, "==========================================", ln=True, align="C")
+    pdf.cell(0, 8, "~Terimakasih~", ln=True, align="C")
+    pdf.cell(0, 8, "Amreta Network", ln=True, align="C")
+    pdf.cell(0, 8, "==========================================", ln=True, align="C")
 
 
 def CreateInvoicePDF(data: list) -> BytesIO:
