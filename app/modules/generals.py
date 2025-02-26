@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 from bson import ObjectId
 import pytz
 from typing import Any
+import secrets
+import string
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -91,8 +93,9 @@ def GenerateReferralCode(unique_data):
 
 
 def GenerateRandomString(unique_data, length: int = 10):
-    random_string = hashlib.md5(unique_data.encode())
-    return random_string.hexdigest()[:length]
+    alphabet = string.ascii_letters + string.digits
+    random_string = "".join(secrets.choice(alphabet) for _ in range(length))
+    return random_string
 
 
 def GetDueDateRange(gap: int):
