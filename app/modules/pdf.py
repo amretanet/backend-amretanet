@@ -470,7 +470,7 @@ def CreateInvoicePDF(data: list) -> BytesIO:
 
 
 def CreateInvoiceThermal(data: list):
-    pdf = FPDF(orientation="P", unit="mm", format=(58, 1000))
+    pdf = FPDF(orientation="P", unit="mm", format=(58, 150))
     pdf.set_auto_page_break(auto=True, margin=5)
     for item in data:
         pdf.add_page()
