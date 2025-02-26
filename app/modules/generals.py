@@ -95,7 +95,7 @@ def GenerateReferralCode(unique_data):
 def GenerateRandomString(unique_data, length: int = 10):
     alphabet = string.ascii_letters + string.digits
     random_string = "".join(secrets.choice(alphabet) for _ in range(length))
-    return random_string
+    return random_string.lower()
 
 
 def GetDueDateRange(gap: int):
