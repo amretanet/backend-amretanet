@@ -348,14 +348,14 @@ def CreateThermalHeader(pdf: FPDF, show_line: bool = True):
 
 
 def CreateThermalInvoiceBody(pdf: FPDF, data):
-    pdf.set_font("Arial", "", 6)
+    pdf.set_font("Arial", "B", 6)
     pdf.set_y(30)
     pdf.cell(0, 5, "======================================", ln=True, align="C")
     pdf.set_y(33)
     pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 6, "Struk Pembayaran Tagihan", ln=True, align="C")
     pdf.set_y(38)
-    pdf.set_font("Arial", "", 6)
+    pdf.set_font("Arial", "B", 6)
     pdf.cell(0, 5, "======================================", ln=True, align="C")
     pdf.set_x(5)
     pdf.cell(
@@ -402,7 +402,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
     pdf.cell(15, 4, "Harga", border=False, ln=True, align="R")
     package_items = data.get("package", []) + data.get("add_on_packages", [])
     for index, item in enumerate(package_items):
-        pdf.set_font("Arial", "", 6)
+        pdf.set_font("Arial", "B", 6)
         pdf.set_x(5)
         pdf.cell(33, 4, item.get("name", "-"), border=False, ln=False, align="L")
         pdf.cell(
@@ -442,7 +442,7 @@ def CreateThermalInvoiceBody(pdf: FPDF, data):
         ln=True,
         align="C",
     )
-    pdf.set_font("Arial", "", 6)
+    pdf.set_font("Arial", "B", 6)
     pdf.cell(0, 4, "======================================", ln=True, align="C")
     pdf.cell(0, 4, "~Terimakasih~", ln=True, align="C")
     pdf.cell(0, 4, "Amreta Network", ln=True, align="C")
