@@ -15,6 +15,7 @@ class PaymentPayOffData(BaseModel):
     method: PaymentMethodData
     image_url: Optional[str] = None
     description: str
+    unique_code: int
 
 
 class PaymentVAInsertData(BaseModel):

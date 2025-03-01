@@ -76,9 +76,17 @@ async def pay_off_payment(
     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
     if not invoice_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
     payload = data.dict(exclude_unset=True)
+    invoice_data["amount"] = (
+        invoice_data["package_amount"]
+        + invoice_data["add_on_package_amount"]
+        + payload["unique_code"]
+    )
     update_data = {
         "status": InvoiceStatusData.PAID,
+        "unique_code": payload["unique_code"],
+        "amount": invoice_data["amount"],
         "payment": {
             "method": payload["method"],
             "description": payload["description"],
