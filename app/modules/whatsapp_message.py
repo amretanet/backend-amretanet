@@ -1,7 +1,12 @@
 from bson import ObjectId
 import requests
 from app.models.tickets import TicketTypeData
-from app.modules.crud_operations import CreateOneData, GetAggregateData, GetOneData
+from app.modules.crud_operations import (
+    CreateOneData,
+    GetAggregateData,
+    GetOneData,
+    UpdateOneData,
+)
 from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
 import os
 from app.models.notifications import NotificationTypeData
@@ -186,6 +191,11 @@ async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
         }
         whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
+        await UpdateOneData(
+            db.invoices,
+            {"_id": ObjectId(id_invoice)},
+            {"$set": {"is_whatsapp_sended": True}},
+        )
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -230,6 +240,11 @@ async def SendWhatsappPaymentReminderMessage(db, id_invoice):
         }
         whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
+        await UpdateOneData(
+            db.invoices,
+            {"_id": ObjectId(id_invoice)},
+            {"$set": {"is_whatsapp_reminder_sended": True}},
+        )
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 
@@ -274,6 +289,11 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
         }
         whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
+        await UpdateOneData(
+            db.invoices,
+            {"_id": ObjectId(id_invoice)},
+            {"$set": {"is_whatsapp_overdue_sended": True}},
+        )
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
 

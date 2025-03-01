@@ -18,6 +18,7 @@ from app.modules.crud_operations import (
     CreateOneData,
     DeleteManyData,
     GetAggregateData,
+    GetDistictData,
     GetManyData,
     GetOneData,
     UpdateManyData,
@@ -53,6 +54,20 @@ load_dotenv()
 
 PPN = int(os.getenv("PPN"))
 PAID_LEAVE_PERCENTAGE = int(os.getenv("PAID_LEAVE_PERCENTAGE"))
+
+
+async def GetUniqueCode(db, sub_amount: int):
+    used_code = await GetDistictData(
+        db.invoices, {"status": "UNPAID", "sub_amount": sub_amount}, "unique_code"
+    )
+    available_codes = [code for code in range(1, 1000) if code not in used_code]
+    new_unique_code = 1
+    if len(available_codes) > 0:
+        index = len(available_codes) // 2
+        new_unique_code = available_codes[index]
+
+    return new_unique_code
+
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
@@ -318,14 +333,7 @@ async def generate_invoice(
             invoice_exist += 1
             continue
 
-        unique_code = 0
-        last_unique_code = await GetOneData(
-            db.configurations, {"type": "INVOICE_UNIQUE_CODE"}
-        )
-        if last_unique_code:
-            unique_code = int(last_unique_code["value"])
-
-        current_unique_code = unique_code + 1
+        current_unique_code = await GetUniqueCode(db, customer["amount"])
         ppn = 0
         paid_leave_discount = 0
         if customer.get("ppn", 0):
@@ -366,11 +374,7 @@ async def generate_invoice(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
-        await UpdateOneData(
-            db.configurations,
-            {"type": "INVOICE_UNIQUE_CODE"},
-            {"$set": {"value": current_unique_code}},
-        )
+
         if is_send_whatsapp:
             await SendWhatsappPaymentCreatedMessage(db, str(invoice_result.inserted_id))
 
@@ -505,11 +509,6 @@ async def invoice_whatsapp_created(
         )
         for item in invoice_data:
             await SendWhatsappPaymentCreatedMessage(db, item["_id"])
-            await UpdateOneData(
-                db.invoices,
-                {"_id": ObjectId(item["_id"])},
-                {"$set": {"is_whatsapp_sended": True}},
-            )
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -546,11 +545,6 @@ async def invoice_whatsapp_reminder(
         )
         for item in invoice_data:
             await SendWhatsappPaymentReminderMessage(db, item["_id"])
-            await UpdateOneData(
-                db.invoices,
-                {"_id": ObjectId(item["_id"])},
-                {"$set": {"is_whatsapp_reminder_sended": True}},
-            )
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -585,11 +579,6 @@ async def invoice_whatsapp_overdue(
         invoice_data = await GetAggregateData(db.invoices, pipeline)
         for invoice in invoice_data:
             await SendWhatsappPaymentOverdueMessage(db, invoice["_id"])
-            await UpdateOneData(
-                db.invoices,
-                {"_id": ObjectId(invoice["_id"])},
-                {"$set": {"is_whatsapp_overdue_sended": True}},
-            )
 
     return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
 
@@ -819,14 +808,7 @@ async def create_invoice(
         if int(customer_due_date) > max_date_of_month:
             customer_due_date = str(max_date_of_month).zfill(2)
 
-        unique_code = 0
-        last_unique_code = await GetOneData(
-            db.configurations, {"type": "INVOICE_UNIQUE_CODE"}
-        )
-        if last_unique_code:
-            unique_code = int(last_unique_code["value"])
-
-        current_unique_code = unique_code + 1
+        current_unique_code = await GetUniqueCode(db, customer["amount"])
         ppn = 0
         paid_leave_discount = 0
         if customer.get("ppn", 0):
@@ -867,11 +849,6 @@ async def create_invoice(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
-        await UpdateOneData(
-            db.configurations,
-            {"type": "INVOICE_UNIQUE_CODE"},
-            {"$set": {"value": current_unique_code}},
-        )
 
         invoice_created += 1
 

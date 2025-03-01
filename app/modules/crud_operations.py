@@ -3,6 +3,15 @@ from app.modules.generals import JsonObjectFormatter
 import json
 
 
+async def GetDistictData(v_db_collection, v_query=None, v_field="_id"):
+    if v_query is not None:
+        cursor = v_db_collection.distinct(v_field, v_query)
+    else:
+        cursor = v_db_collection.distinct(v_field)
+    result = await cursor
+    return result
+
+
 async def GetDataCount(v_db_collection, v_query={}):
     count: int = await v_db_collection.count_documents(v_query)
     return count

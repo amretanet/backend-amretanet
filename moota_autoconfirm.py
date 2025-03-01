@@ -222,6 +222,7 @@ async def main():
     db = get_database()
     confirmed = 0
     duplicated = 0
+
     invoice_data = list(db.invoices.find({"status": {"$in": ["UNPAID", "PENDING"]}}))
     for invoice in invoice_data:
         print("=" * 100)
