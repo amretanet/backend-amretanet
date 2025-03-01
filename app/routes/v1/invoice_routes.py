@@ -1,6 +1,7 @@
 import base64
 from calendar import monthrange
 from datetime import datetime, timedelta
+import random
 from dateutil.relativedelta import relativedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -63,7 +64,7 @@ async def GetUniqueCode(db, sub_amount: int):
     available_codes = [code for code in range(1, 1000) if code not in used_code]
     new_unique_code = 1
     if len(available_codes) > 0:
-        index = len(available_codes) // 2
+        index = random.randint(0, len(available_codes) - 1)
         new_unique_code = available_codes[index]
 
     return new_unique_code
