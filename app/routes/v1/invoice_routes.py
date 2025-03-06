@@ -131,38 +131,6 @@ async def get_invoice(
             }
         },
         {"$unwind": "$customer"},
-        # {
-        #     "$addFields": {
-        #         "status_priority": {
-        #             "$switch": {
-        #                 "branches": [
-        #                     {
-        #                         "case": {
-        #                             "$eq": [
-        #                                 "$status",
-        #                                 InvoiceStatusData.UNPAID.value,
-        #                             ]
-        #                         },
-        #                         "then": 1,
-        #                     },
-        #                     {
-        #                         "case": {
-        #                             "$eq": ["$status", InvoiceStatusData.PENDING.value]
-        #                         },
-        #                         "then": 2,
-        #                     },
-        #                 ],
-        #                 "default": 3,
-        #             }
-        #         }
-        #     }
-        # },
-        # {
-        #     "$sort": {
-        #         "status_priority": 1,
-        #         "due_date": 1,
-        #     }
-        # },
         {"$sort": {sort_key: 1 if sort_direction == "asc" else -1}},
     ]
 
@@ -176,6 +144,28 @@ async def get_invoice(
             "pagination_info": pagination_info,
         }
     )
+
+
+@router.get("/detail/{id}")
+async def get_invoice_detail(
+    id: str,
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    invoice_data = await GetOneData(
+        db.invoices,
+        {"_id": ObjectId(id)},
+        {
+            "name": 1,
+            "service_number": 1,
+            "due_date": 1,
+            "status": 1,
+            "amount": 1,
+        },
+    )
+    if not invoice_data:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    return JSONResponse(content={"invoice_data": invoice_data})
 
 
 @router.get("/generate")
