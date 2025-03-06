@@ -173,7 +173,7 @@ async def SendWhatsappPaymentCreatedMessage(db, id_invoice):
             "[tgl_due_date]": customer_data.get("due_date", ""),
             "[bulan_tagihan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
             "[tahun_tagihan]": invoice_data.get("year"),
-            "[link]": f"{FRONTEND_DOMAIN}/customers/invoice",
+            "[link]": f"{FRONTEND_DOMAIN}/quick-payment?id={id_invoice}",
             "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
         }
 
@@ -222,7 +222,7 @@ async def SendWhatsappPaymentReminderMessage(db, id_invoice):
         fields_to_replace = {
             "[nama_pelanggan]": customer_data.get("name", "-"),
             "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
-            "[link]": f"{FRONTEND_DOMAIN}/customers/invoice",
+            "[link]": f"{FRONTEND_DOMAIN}/quick-payment?id={id_invoice}",
             "[footer_wa]": whatsapp_message.get("advance", "").get("footer", ""),
         }
 
@@ -272,7 +272,7 @@ async def SendWhatsappPaymentOverdueMessage(db, id_invoice):
             "[judul]": f"*{whatsapp_message.get('advance', '').get('header', '')}*",
             "[nama_pelanggan]": customer_data.get("name", "-"),
             "[no_servis]": customer_data.get("service_number", "-"),
-            "[link]": f"{FRONTEND_DOMAIN}/customers/invoice",
+            "[link]": f"{FRONTEND_DOMAIN}/quick-payment?id={id_invoice}",
         }
 
         for key, value in fields_to_replace.items():
