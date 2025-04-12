@@ -89,7 +89,8 @@ async def create_package(
     if payload["category"] == PackageCategoryData.ADD_ONS:
         payload["router_profile"] = None
         payload["bandwidth"] = None
-
+    
+    payload["id_mitra"] = [ObjectId(str(id).strip()) for id in payload["id_mitra"]]
     payload["created_at"] = GetCurrentDateTime()
     result = await CreateOneData(db.packages, payload)
     if not result:
@@ -126,6 +127,8 @@ async def update_package(
     if payload["category"] == PackageCategoryData.ADD_ONS:
         payload["router_profile"] = None
         payload["bandwidth"] = None
+
+    payload["id_mitra"] = [ObjectId(str(id).strip()) for id in payload["id_mitra"]]
     payload["updated_at"] = GetCurrentDateTime()
     result = await UpdateOneData(db.packages, {"_id": ObjectId(id)}, {"$set": payload})
     if not result:

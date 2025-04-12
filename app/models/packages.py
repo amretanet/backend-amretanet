@@ -13,6 +13,7 @@ PackageProjections = {
     "is_displayed": 1,
     "category": 1,
     "description": 1,
+    "id_mitra": 1,
 }
 
 
@@ -25,6 +26,7 @@ class PackageCategoryData(str, Enum):
 class PackagePriceData(BaseModel):
     regular: int
     reseller: int
+    mitra_fee: int = 0
 
 
 class PackageInsertData(BaseModel):
@@ -37,3 +39,4 @@ class PackageInsertData(BaseModel):
     price: PackagePriceData
     is_displayed: int
     description: Optional[str] = None
+    id_mitra: Optional[list[str]] = []

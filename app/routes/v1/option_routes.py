@@ -1,3 +1,4 @@
+from bson import ObjectId
 from fastapi import (
     APIRouter,
     Depends,
@@ -233,6 +234,7 @@ async def get_router_options(
 @router.get("/package")
 async def get_package_options(
     is_displayed: int = None,
+    id_mitra: str = None,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     PackageOptionProjections = {
@@ -247,6 +249,8 @@ async def get_package_options(
     query = {}
     if is_displayed is not None:
         query["is_displayed"] = is_displayed
+    if id_mitra is not None:
+        query["id_mitra"] = {"$in": [ObjectId(id_mitra)]}
     package_options = await GetAggregateData(
         db.packages, [{"$match": query}], PackageOptionProjections
     )
