@@ -223,7 +223,17 @@ async def main():
     confirmed = 0
     duplicated = 0
 
-    invoice_data = list(db.invoices.find({"status": {"$in": ["UNPAID", "PENDING"]}}))
+    invoice_data = list(
+        db.invoices.find(
+            {
+                "status": {"$in": ["UNPAID", "PENDING"]},
+                "due_date": {
+                    "$gte": GetCurrentDateTime() - timedelta(days=5),
+                    "$lte": GetCurrentDateTime() + timedelta(days=5),
+                },
+            }
+        )
+    )
     for invoice in invoice_data:
         print("=" * 100)
         amount = invoice.get("amount", 0)

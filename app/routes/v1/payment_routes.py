@@ -381,7 +381,12 @@ async def moota_callback(
     except Exception as e:
         print(str(e))
         await CreateOneData(
-            db.logs_plugin, {"plugin": "Moota", "error_message": str(e)}
+            db.logs_plugin,
+            {
+                "plugin": "Moota",
+                "created_at": GetCurrentDateTime(),
+                "error_message": str(e),
+            },
         )
 
 
@@ -488,7 +493,12 @@ async def create_ipaymu_payment(
         return JSONResponse(content={"payment_url": payment_url})
     except Exception as e:
         await CreateOneData(
-            db.logs_plugin, {"plugin": "Ipaymu", "error_message": str(e)}
+            db.logs_plugin,
+            {
+                "plugin": "Ipaymu",
+                "created_at": GetCurrentDateTime(),
+                "error_message": str(e),
+            },
         )
         raise HTTPException(
             status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}
@@ -590,7 +600,12 @@ async def ipaymu_payment_callback(
         return JSONResponse(content={"message": "Callback Diterima"})
     except Exception as e:
         await CreateOneData(
-            db.logs_plugin, {"plugin": "Ipaymu", "error_message": str(e)}
+            db.logs_plugin,
+            {
+                "plugin": "Ipaymu",
+                "created_at": GetCurrentDateTime(),
+                "error_message": str(e),
+            },
         )
         raise HTTPException(
             status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE, "err_msg": str(e)}

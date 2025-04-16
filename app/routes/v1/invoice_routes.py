@@ -58,16 +58,24 @@ PAID_LEAVE_PERCENTAGE = int(os.getenv("PAID_LEAVE_PERCENTAGE"))
 
 
 async def GetUniqueCode(db, sub_amount: int):
-    used_code = await GetDistictData(
-        db.invoices, {"status": "UNPAID", "sub_amount": sub_amount}, "unique_code"
+    current_unique_code = 1
+    unique_code = await GetOneData(
+        db.configurations, {"type": "INVOICE_UNIQUE_CODE", "amount": sub_amount}
     )
-    available_codes = [code for code in range(1, 1000) if code not in used_code]
-    new_unique_code = 1
-    if len(available_codes) > 0:
-        index = random.randint(0, len(available_codes) - 1)
-        new_unique_code = available_codes[index]
+    if unique_code:
+        current_unique_code = unique_code.get("value", 1)
 
-    return new_unique_code
+    next_unique_code = current_unique_code + 1
+    if current_unique_code >= 999:
+        next_unique_code = 1
+
+    await UpdateOneData(
+        db.configurations,
+        {"type": "INVOICE_UNIQUE_CODE", "amount": sub_amount},
+        {"$set": {"value": next_unique_code}},
+        upsert=True,
+    )
+    return current_unique_code
 
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
