@@ -217,6 +217,44 @@ def activate_mikrotik_ppp_secret(customer_data, disabled: bool = False):
     return True
 
 
+def check_mitra_fee(customer_data, id_invoice):
+    db = get_database()
+    try:
+        invoice_data = list(
+            db.invoices.find({"id_customer": ObjectId(customer_data.get("_id"))})
+        )
+        if len(invoice_data) <= 1:
+            return
+
+        if customer_data.get("referral", None):
+            referral_user = db.users.find_one(
+                {"referral": customer_data.get("referral")}
+            )
+            if referral_user and referral_user.get("role") == 6:
+                package_data = db.packages.find_one(
+                    {"_id": ObjectId(customer_data.get("id_package"))}
+                )
+                if package_data:
+                    package_fee = package_data.get("price", {}).get("mitra_fee", 0)
+                    mitra_fee = referral_user.get("saldo", 0) + package_fee
+                    db.users.update_one(
+                        {"referral": customer_data.get("referral")},
+                        {"$set": {"saldo": mitra_fee}},
+                    )
+                    db.invoices_fees.insert_one(
+                        {
+                            "id_customer": ObjectId(customer_data.get("_id")),
+                            "id_invoice": ObjectId(id_invoice),
+                            "id_user": ObjectId(referral_user.get("_id")),
+                            "referral": referral_user.get("referral"),
+                            "fee": package_fee,
+                            "created_at": GetCurrentDateTime(),
+                        },
+                    )
+    except Exception as e:
+        print(str(e))
+
+
 async def main():
     start_time = GetCurrentDateTime()
     db = get_database()
@@ -290,6 +328,7 @@ async def main():
                 customer_data = db.customers.find_one({"_id": invoice["id_customer"]})
                 if customer_data:
                     activate_mikrotik_ppp_secret(customer_data, False)
+                    check_mitra_fee(customer_data, invoice["_id"])
 
                 send_whatsapp_payment_success(invoice["_id"])
                 send_telegram_payment_success(invoice["_id"])
