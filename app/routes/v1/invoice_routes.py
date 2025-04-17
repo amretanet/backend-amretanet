@@ -1,7 +1,6 @@
 import base64
 from calendar import monthrange
 from datetime import datetime, timedelta
-import random
 from dateutil.relativedelta import relativedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -18,8 +17,8 @@ from app.models.users import UserData, UserRole
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteManyData,
+    DeleteOneData,
     GetAggregateData,
-    GetDistictData,
     GetManyData,
     GetOneData,
     UpdateManyData,
@@ -48,6 +47,7 @@ from app.modules.response_message import (
     NOT_FOUND_MESSAGE,
 )
 from app.routes.v1.auth_routes import GetCurrentUser
+from app.routes.v1.payment_routes import CheckMitraFee
 import os
 from dotenv import load_dotenv
 
@@ -1057,6 +1057,8 @@ async def update_invoice_status(
             ):
                 RemoveFilePath(exist_data["payment"]["image_url"])
 
+            await DeleteOneData(db.invoice_fees, {"id_invoice": ObjectId(id)})
+
         update_data = {
             "$set": {
                 "status": status,
@@ -1074,6 +1076,22 @@ async def update_invoice_status(
         for id in id_list:
             await SendWhatsappPaymentSuccessMessage(db, id)
             await SendTelegramPaymentMessage(db, id)
+            invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+            if invoice_data:
+                customer_data = await GetOneData(
+                    db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+                )
+                if customer_data:
+                    status = customer_data.get("status", None)
+                    if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
+                        await UpdateOneData(
+                            db.customers,
+                            {"_id": ObjectId(invoice_data["id_customer"])},
+                            {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+                        )
+                        await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+                    await CheckMitraFee(db, customer_data, id)
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 

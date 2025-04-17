@@ -25,6 +25,7 @@ from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
     CreateOneData,
     GetAggregateData,
+    GetManyData,
     GetOneData,
     UpdateOneData,
 )
@@ -57,6 +58,45 @@ AUTOCONFIRM_USER_ID = os.getenv("AUTOCONFIRM_USER_ID")
 AUTOCONFIRM_USER_EMAIL = os.getenv("AUTOCONFIRM_USER_EMAIL")
 
 router = APIRouter(prefix="/payment", tags=["Payments"])
+
+
+async def CheckMitraFee(db, customer_data, id_invoice):
+    invoice_data, count = await GetManyData(
+        db.invoices,
+        [{"$match": {"id_customer": ObjectId(customer_data.get("_id"))}}],
+        {"_id": 1},
+    )
+    if count <= 1:
+        return
+
+    if customer_data.get("referral", None):
+        referral_user = await GetOneData(
+            db.users, {"referral": customer_data.get("referral")}
+        )
+        if referral_user and referral_user.get("role") == UserRole.MITRA:
+            package_data = await GetOneData(
+                db.packages,
+                {"_id": ObjectId(customer_data.get("id_package"))},
+            )
+            if package_data:
+                package_fee = package_data.get("price", {}).get("mitra_fee", 0)
+                mitra_fee = referral_user.get("saldo", 0) + package_fee
+                await UpdateOneData(
+                    db.users,
+                    {"referral": customer_data.get("referral")},
+                    {"$set": {"saldo": mitra_fee}},
+                )
+                await CreateOneData(
+                    db.invoice_fees,
+                    {
+                        "id_customer": ObjectId(customer_data.get("_id")),
+                        "id_invoice": ObjectId(id_invoice),
+                        "id_user": ObjectId(referral_user.get("_id")),
+                        "referral": referral_user.get("referral"),
+                        "fee": package_fee,
+                        "created_at": GetCurrentDateTime(),
+                    },
+                )
 
 
 @router.put("/pay-off/{id}")
@@ -130,6 +170,8 @@ async def pay_off_payment(
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
+        await CheckMitraFee(db, customer_data, id)
+
     notification_data = {
         "id_user": ObjectId(customer_data["id_user"]),
         "title": "Tagihan Telah Dibayar",
@@ -200,6 +242,8 @@ async def confirm_payment(
                 {"$set": {"status": CustomerStatusData.ACTIVE.value}},
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+        await CheckMitraFee(db, customer_data, id)
 
         notification_data = {
             "id_user": ObjectId(customer_data["id_user"]),
@@ -467,6 +511,8 @@ async def ipaymu_payment_callback(
                     {"$set": {"status": CustomerStatusData.ACTIVE.value}},
                 )
                 await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+            await CheckMitraFee(db, customer_data, id_invoice)
 
             notification_data = {
                 "id_user": ObjectId(customer_data["id_user"]),
