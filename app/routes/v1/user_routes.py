@@ -70,6 +70,7 @@ async def get_users(
                 {"name": {"$regex": key, "$options": "i"}},
                 {"email": {"$regex": key, "$options": "i"}},
                 {"phone_number": {"$regex": key, "$options": "i"}},
+                {"referral": {"$regex": key, "$options": "i"}},
             ]
         }
     if role:

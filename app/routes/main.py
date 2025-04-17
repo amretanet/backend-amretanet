@@ -23,6 +23,7 @@ from app.routes.v1 import (
     notification_routes,
     change_submission_routes,
     transaction_routes,
+    referral_fee_routes,
 )
 
 router = APIRouter()
@@ -42,6 +43,7 @@ router.include_router(odp_routes.router)
 router.include_router(option_routes.router)
 router.include_router(payment_routes.router)
 router.include_router(package_routes.router)
+router.include_router(referral_fee_routes.router)
 router.include_router(router_routes.router)
 router.include_router(salary_routes.router)
 router.include_router(transaction_routes.router)
