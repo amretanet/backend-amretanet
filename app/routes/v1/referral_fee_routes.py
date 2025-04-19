@@ -14,8 +14,9 @@ from app.models.users import (
     UserRole,
 )
 from app.models.referral_fees import (
-    ReferralFeePayoffData,
+    ReferralFeeInsertData,
     ReferralFeeProjections,
+    ReferralFeeRequestData,
     ReferralFeeStatusData,
     ReferralFeeUpdateData,
     ReferralFeeUserProjections,
@@ -187,9 +188,9 @@ async def get_referral_fee_users(
     )
 
 
-@router.post("/pay-off")
-async def pay_off_referral_fee(
-    data: ReferralFeePayoffData = Body(..., embed=True),
+@router.post("/add")
+async def add_referral_fee(
+    data: ReferralFeeInsertData = Body(..., embed=True),
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
@@ -241,6 +242,49 @@ async def pay_off_referral_fee(
     payload["id_referral_fee"] = result.inserted_id
     del payload["status"]
     await CreateOneData(db.expenditures, payload)
+
+    return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
+
+
+@router.post("/request")
+async def request_referral_fee(
+    data: ReferralFeeRequestData = Body(..., embed=True),
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
+
+    payload = data.dict(exclude_unset=True)
+    if payload["nominal"] <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Jumlah Nominal Tidak Boleh Kurang Dari Nol!"},
+        )
+
+    id_user = ObjectIDValidator(payload["id_user"])
+    if not id_user:
+        raise HTTPException(
+            status_code=400, detail={"message": OBJECT_ID_NOT_VALID_MESSAGE}
+        )
+
+    user_data = await GetOneData(db.users, {"_id": id_user})
+    if user_data.get("saldo", 0) < payload["nominal"]:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Jumlah Saldo Tidak Mencukupi Untuk Melakukan Penarikan!"
+            },
+        )
+    payload["id_user"] = id_user
+    payload["created_at"] = GetCurrentDateTime()
+    payload["created_by"] = ObjectId(current_user.id)
+    payload["status"] = ReferralFeeStatusData.PENDING
+    result = await CreateOneData(db.referral_fees, payload)
+    if not result.inserted_id:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 

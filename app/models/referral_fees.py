@@ -36,12 +36,18 @@ class ReferralFeeStatusData(str, Enum):
     REJECTED = "REJECTED"
 
 
-class ReferralFeePayoffData(BaseModel):
+class ReferralFeeInsertData(BaseModel):
     id_user: str
     date: datetime
     nominal: int
     description: str
     method: str
+
+
+class ReferralFeeRequestData(BaseModel):
+    id_user: str
+    nominal: int
+    reason: str
 
 
 class ReferralFeeUpdateData(BaseModel):
