@@ -74,6 +74,9 @@ async def backup_data(
     for collection_name in collections:
         collection = db[collection_name]
         documents = await collection.find().to_list(None)
+        if len(documents) == 0:
+            continue
+
         backup_filename = f"{BACKUP_DIR}/{collection_name}.json"
         with open(backup_filename, "w", encoding="utf-8") as f:
             json.dump(
