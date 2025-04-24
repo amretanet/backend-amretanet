@@ -513,3 +513,22 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
             requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
+
+
+async def SendWhatsappFeeRequestedMessage(db, name: str, nominal: int, reason: str):
+    try:
+        v_message = "*Permintaan Bonus Referral*\n\n"
+        v_message += f"*Nama*: {name}\n"
+        v_message += f"*Nominal*: Rp{ThousandSeparator(nominal)}\n"
+        v_message += f"*Alasan*: {reason}\n"
+
+        params = {
+            "api_key": WHATSAPP_API_KEY,
+            "sender": WHATSAPP_BOT_NUMBER,
+            "number": f"62{WHATSAPP_ADMIN_NUMBER}",
+            "message": v_message,
+        }
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
+        requests.post(whatsapp_api_url, json=params, timeout=60)
+    except Exception as e:
+        await CreateWhatsappErrorNotification(db, str(e))

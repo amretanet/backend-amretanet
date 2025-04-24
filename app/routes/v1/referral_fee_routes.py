@@ -21,6 +21,7 @@ from app.models.referral_fees import (
     ReferralFeeUpdateData,
     ReferralFeeUserProjections,
 )
+from app.modules.whatsapp_message import SendWhatsappFeeRequestedMessage
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import (
     GetCurrentDateTime,
@@ -278,6 +279,7 @@ async def request_referral_fee(
                 "message": "Jumlah Saldo Tidak Mencukupi Untuk Melakukan Penarikan!"
             },
         )
+
     payload["id_user"] = id_user
     payload["created_at"] = GetCurrentDateTime()
     payload["created_by"] = ObjectId(current_user.id)
@@ -286,6 +288,12 @@ async def request_referral_fee(
     if not result.inserted_id:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    await SendWhatsappFeeRequestedMessage(
+        db,
+        user_data.get("name", "Tidak Diketahui"),
+        payload["nominal"],
+        payload["reason"],
+    )
     return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 
 
