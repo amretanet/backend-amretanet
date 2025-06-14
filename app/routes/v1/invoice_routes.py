@@ -1,6 +1,7 @@
 import base64
 from calendar import monthrange
 from datetime import datetime, timedelta
+import time
 from dateutil.relativedelta import relativedelta
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -179,6 +180,7 @@ async def get_invoice_detail(
 @router.get("/generate")
 async def generate_invoice(
     is_send_whatsapp: bool = False,
+    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
@@ -376,6 +378,8 @@ async def generate_invoice(
 
         if is_send_whatsapp:
             await SendWhatsappPaymentCreatedMessage(db, str(invoice_result.inserted_id))
+            if is_delay:
+                time.sleep(3)
 
         invoice_created += 1
 
@@ -480,6 +484,7 @@ async def print_invoice_thermal(
 @router.get("/created")
 async def invoice_whatsapp_created(
     id: str = None,
+    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     if id:
@@ -508,6 +513,8 @@ async def invoice_whatsapp_created(
         )
         for item in invoice_data:
             await SendWhatsappPaymentCreatedMessage(db, item["_id"])
+            if is_delay:
+                time.sleep(3)
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -515,6 +522,7 @@ async def invoice_whatsapp_created(
 @router.get("/whatsapp-reminder")
 async def invoice_whatsapp_reminder(
     id: str = None,
+    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     if id:
@@ -544,6 +552,8 @@ async def invoice_whatsapp_reminder(
         )
         for item in invoice_data:
             await SendWhatsappPaymentReminderMessage(db, item["_id"])
+            if is_delay:
+                time.sleep(3)
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -551,6 +561,7 @@ async def invoice_whatsapp_reminder(
 @router.get("/overdue")
 async def invoice_whatsapp_overdue(
     id: str = None,
+    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     if id:
@@ -578,6 +589,8 @@ async def invoice_whatsapp_overdue(
         invoice_data = await GetAggregateData(db.invoices, pipeline)
         for invoice in invoice_data:
             await SendWhatsappPaymentOverdueMessage(db, invoice["_id"])
+            if is_delay:
+                time.sleep(3)
 
     return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
 
@@ -585,6 +598,7 @@ async def invoice_whatsapp_overdue(
 @router.get("/isolir-customer")
 async def isolir_customer(
     id: str = None,
+    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     if id:
@@ -639,6 +653,8 @@ async def isolir_customer(
                     {"_id": ObjectId(invoice["_id"])},
                     {"$set": {"is_whatsapp_isolir_sended": True}},
                 )
+                if is_delay:
+                    time.sleep(3)
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
