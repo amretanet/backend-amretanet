@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.routes.v1 import (
     auth_routes,
+    bill_routes,
     ticket_routes,
     whatsapp_message_routes,
     coverage_area_routes,
@@ -28,6 +29,7 @@ from app.routes.v1 import (
 
 router = APIRouter()
 router.include_router(auth_routes.router)
+router.include_router(bill_routes.router)
 router.include_router(change_submission_routes.router)
 router.include_router(coverage_area_routes.router)
 router.include_router(customer_routes.router)

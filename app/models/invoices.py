@@ -15,6 +15,8 @@ class InvoiceStatusData(str, Enum):
     PAID = "PAID"
     UNPAID = "UNPAID"
     PENDING = "PENDING"
+    COLLECTING = "COLLECTING"
+    COLLECTED = "COLLECTED"
 
 
 class InvoiceInsertData(BaseModel):

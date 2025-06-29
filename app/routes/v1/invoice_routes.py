@@ -1112,6 +1112,39 @@ async def update_invoice_status(
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 
+@router.put("/update/collector-status")
+async def update_invoice_collector_status(
+    id: str,
+    status: InvoiceStatusData,
+    description: str = None,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if status not in [InvoiceStatusData.COLLECTING.value, InvoiceStatusData.COLLECTED.value]:
+        raise HTTPException(status_code=400, detail={"message": "Invalid collector status."})
+
+    try:
+        decoded_id = base64.b64decode(id).decode("utf-8")
+        id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    except Exception:
+        raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
+
+    update_data = {
+        "$set": {
+            "status": status,
+            "collector.description": description,
+            "collector.updated_by": current_user.email,
+            "collector.updated_at": GetCurrentDateTime(),
+        }
+    }
+
+    result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+    return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+
+
 @router.delete("/delete")
 async def delete_invoice(
     id: str,
