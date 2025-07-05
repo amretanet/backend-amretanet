@@ -3,6 +3,8 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 import time
 from dateutil.relativedelta import relativedelta
+from typing import Optional, List
+
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -1112,37 +1114,92 @@ async def update_invoice_status(
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
 
+# @router.put("/update/collector-status")
+# async def update_invoice_collector_status(
+#     id: str,
+#     status: InvoiceStatusData,
+#     description: str = None,
+#     current_user: UserData = Depends(GetCurrentUser),
+#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+# ):
+#     if status not in [InvoiceStatusData.COLLECTING.value, InvoiceStatusData.COLLECTED.value]:
+#         raise HTTPException(status_code=400, detail={"message": "Invalid collector status."})
+
+#     try:
+#         decoded_id = base64.b64decode(id).decode("utf-8")
+#         id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+#     except Exception:
+#         raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
+
+#     update_data = {
+#         "$set": {
+#             "status": status,
+#             "collector.description": description,
+#             "collector.updated_by": current_user.email,
+#             "collector.updated_at": GetCurrentDateTime(),
+#         }
+#     }
+
+#     result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
+#     if not result:
+#         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+#     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+
 @router.put("/update/collector-status")
 async def update_invoice_collector_status(
-    id: str,
-    status: InvoiceStatusData,
-    description: str = None,
-    current_user: UserData = Depends(GetCurrentUser),
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-):
-    if status not in [InvoiceStatusData.COLLECTING.value, InvoiceStatusData.COLLECTED.value]:
-        raise HTTPException(status_code=400, detail={"message": "Invalid collector status."})
+        id: str,
+        status: InvoiceStatusData,
+        description: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        current_user: UserData = Depends(GetCurrentUser),
+        db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+    ):
+        if status not in (InvoiceStatusData.COLLECTING, InvoiceStatusData.COLLECTED):
+            raise HTTPException(status_code=400, detail={"message": "Invalid collector status."})
 
-    try:
-        decoded_id = base64.b64decode(id).decode("utf-8")
-        id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
-    except Exception:
-        raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
+        try:
+            decoded = base64.b64decode(id).decode("utf-8")
+            id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
+            if not id_list:
+                raise ValueError
+        except Exception:
+            raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
 
-    update_data = {
-        "$set": {
-            "status": status,
-            "collector.description": description,
-            "collector.updated_by": current_user.email,
-            "collector.updated_at": GetCurrentDateTime(),
+        collector_data = {
+            "description": description,
+            "updated_by": current_user.email,
+            "updated_at": GetCurrentDateTime(),
         }
-    }
 
-    result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
-    if not result:
-        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+        if assigned_to:
+            collector_data["assigned_to"] = assigned_to
 
-    return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+        if status == InvoiceStatusData.COLLECTED:
+            collector_data["collected_at"] = GetCurrentDateTime()
+
+        update_data = {
+            "$set": {
+                "status": status.value,
+                "collector": collector_data,
+            }
+        }
+
+        result = await UpdateManyData(
+            db.invoices,
+            {"_id": {"$in": id_list}},
+            update_data
+        )
+
+        if not result or getattr(result, "modified_count", 0) == 0:
+            raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+        return JSONResponse(
+            content={
+                "message": DATA_HAS_UPDATED_MESSAGE,
+                "modified_count": result.modified_count
+            }
+        )
 
 
 @router.delete("/delete")

@@ -1,3 +1,4 @@
+import base64
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -8,6 +9,8 @@ from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
 from app.models.customers import CustomerStatusData
 from app.models.notifications import NotificationTypeData
+from typing import Optional, List
+
 
 from app.modules.crud_operations import (
     CreateOneData,
@@ -22,6 +25,7 @@ from app.modules.crud_operations import (
 from app.models.bill import (
     BillPayOffData,
     BillStatusData,
+    MarkCollectedBody
 )
 
 from app.modules.response_message import (
@@ -32,6 +36,7 @@ from app.modules.response_message import (
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
+
 
 from app.models.users import UserData
 from app.routes.v1.auth_routes import GetCurrentUser 
@@ -146,7 +151,9 @@ async def get_bill_detail(
             "payment": 1,
             "customer": 1,
             "created_at": 1,
-        },
+            "collector": 1, 
+        }
+
     )
 
     if not bill_data:
@@ -246,6 +253,62 @@ async def pay_off_bill(
         await CreateOneData(db.notifications, notification_data)
 
     return JSONResponse(content={"message": "Tagihan telah dilunasi."})
+
+
+@router.put("/mark-collected")
+async def mark_bill_as_collected(
+    data: MarkCollectedBody,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    # 🔍 Decode & validate ID
+    try:
+        decoded = base64.b64decode(data.id).decode("utf-8")
+        id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
+        if not id_list:
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
+
+    invoices = await db.invoices.find({"_id": {"$in": id_list}}).to_list(length=len(id_list))
+
+    if not invoices:
+        raise HTTPException(status_code=404, detail={"message": "Invoices not found."})
+
+    modified_count = 0
+
+    for invoice in invoices:
+        assigned_to = invoice.get("collector", {}).get("assigned_to")
+
+        collector_data = {
+            "description": data.description,
+            "updated_by": current_user.email,
+            "updated_at": GetCurrentDateTime(),
+            "collected_at": GetCurrentDateTime(),
+            "status": BillStatusData.COLLECTED.value,
+        }
+
+        if assigned_to:
+            collector_data["assigned_to"] = assigned_to
+
+        update_data = {
+            "$set": {
+                "status": BillStatusData.PAID.value,
+                "collector": collector_data,
+            }
+        }
+
+        result = await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
+        if result.modified_count > 0:
+            modified_count += 1
+
+    if modified_count == 0:
+        raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
+
+    return JSONResponse(content={
+        "message": "Tagihan berhasil ditandai sebagai COLLECTED",
+        "modified_count": modified_count
+    })
 
 @router.patch("/bills/{bill_id}/pay")
 async def mark_as_paid(

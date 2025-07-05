@@ -31,6 +31,7 @@ class UserRole(int, Enum):
     NETWORK_OPERATOR = 4
     ENGINEER = 5
     MITRA = 6
+    BILL_COLLECTOR = 7
     CUSTOMER = 99
 
 

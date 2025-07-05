@@ -47,3 +47,7 @@ class RequestConfirmData(BaseModel):
     method: BillPaymentMethodData
     image_url: str
     description: str
+    
+class MarkCollectedBody(BaseModel):
+    id: str
+    description: Optional[str] = None

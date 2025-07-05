@@ -268,3 +268,18 @@ async def change_password(
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+
+@router.get("/list-collectors")
+async def list_collectors(
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    collector_roles = [UserRole.SALES, UserRole.NETWORK_OPERATOR, UserRole.ENGINEER, UserRole.BILL_COLLECTOR]
+    role_values = [role.value for role in collector_roles]
+
+    cursor = db.users.find(
+        { "role": { "$in": role_values } },
+        { "name": 1, "email": 1, "role": 1, "_id": 0 } 
+    )
+    users = await cursor.to_list(length=100)
+
+    return JSONResponse(content={"users": users})
