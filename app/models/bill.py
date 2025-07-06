@@ -30,6 +30,7 @@ class BillStatusData(str, Enum):
     PENDING = "PENDING"
     COLLECTING = "COLLECTING"
     COLLECTED = "COLLECTED"
+    APPROVED = "APPROVED"
 
 class BillPaymentMethodData(str, Enum):
     CASH = "CASH"
@@ -51,3 +52,7 @@ class RequestConfirmData(BaseModel):
 class MarkCollectedBody(BaseModel):
     id: str
     description: Optional[str] = None
+
+class MarkApprovedBody(BaseModel):
+    id: str
+    approved_description: Optional[str] = None

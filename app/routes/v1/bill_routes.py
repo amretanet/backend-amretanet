@@ -10,7 +10,7 @@ from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSe
 from app.models.customers import CustomerStatusData
 from app.models.notifications import NotificationTypeData
 from typing import Optional, List
-
+from dateutil.relativedelta import relativedelta
 
 from app.modules.crud_operations import (
     CreateOneData,
@@ -25,7 +25,8 @@ from app.modules.crud_operations import (
 from app.models.bill import (
     BillPayOffData,
     BillStatusData,
-    MarkCollectedBody
+    MarkCollectedBody,
+    MarkApprovedBody
 )
 
 from app.modules.response_message import (
@@ -64,7 +65,7 @@ async def get_bills(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase)
 ):
-    query = {}
+    query: Dict[str, Any] = {}
 
     if id_customer:
         query["id_customer"] = ObjectId(id_customer)
@@ -80,10 +81,14 @@ async def get_bills(
                         "options": "i",
                     }
                 }
-            }
+            },
         ]
 
-    query["status"] = status if status else "COLLECTING"
+    if status:
+        query["collector.status"] = status
+    else:
+        query["collector.status"] = {"$in": ["COLLECTING", "COLLECTED", "APPROVED"]}
+
 
     if month:
         query["month"] = month
@@ -92,35 +97,34 @@ async def get_bills(
 
     pipeline = [
         {"$match": query},
+        {"$addFields": {"status": "$collector.status"}},
         {
             "$lookup": {
                 "from": "customers",
                 "let": {"customerId": "$id_customer"},
                 "pipeline": [
                     {"$match": {"$expr": {"$eq": ["$_id", "$$customerId"]}}},
-                    {"$project": {"name": 1, "status": 1}}
+                    {"$project": {"name": 1, "status": 1}},
                 ],
-                "as": "customer"
+                "as": "customer",
             }
         },
         {"$unwind": "$customer"},
-        {"$sort": {sort_key: 1 if sort_direction == "asc" else -1}}
+        {"$sort": {sort_key: 1 if sort_direction == "asc" else -1}},
     ]
 
     bill_data, count = await GetManyData(
         db.invoices, pipeline, {}, {"page": page, "items": items}
     )
 
-    pagination_info = {
-        "page": page,
-        "items": items,
-        "count": count,
-    }
-
     return JSONResponse(
         content={
             "bill_data": bill_data,
-            "pagination_info": pagination_info
+            "pagination_info": {
+                "page": page,
+                "items": items,
+                "count": count,
+            },
         }
     )
 
@@ -310,94 +314,196 @@ async def mark_bill_as_collected(
         "modified_count": modified_count
     })
 
-@router.patch("/bills/{bill_id}/pay")
-async def mark_as_paid(
-    bill_id: str,
-    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
-    current_user: UserData = Depends(GetCurrentUser)
+
+@router.put("/mark-approved")
+async def mark_bill_as_approved(
+    data: MarkApprovedBody,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    result = await db.bills.update_one(
-        {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
-        {"$set": {"status": "paid", "updated_at": datetime.utcnow()}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Bill not found or not modified")
-    return {"message": "Bill marked as paid"}
+    try:
+        decoded = base64.b64decode(data.id).decode("utf-8")
+        id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
+        if not id_list:
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
 
-@router.patch("/bills/{bill_id}/collect")
-async def mark_as_collected(
-    bill_id: str,
-    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
-    current_user: UserData = Depends(GetCurrentUser)
+    invoices = await db.invoices.find({"_id": {"$in": id_list}}).to_list(length=len(id_list))
+
+    if not invoices:
+        raise HTTPException(status_code=404, detail={"message": "Invoices not found."})
+
+    modified_count = 0
+
+    for invoice in invoices:
+        collector = invoice.get("collector", {})
+        assigned_to = collector.get("assigned_to")
+
+        collector_data = {
+            "description": collector.get("description", ""),
+            "approved_description": data.approved_description,
+            "updated_by": current_user.email,
+            "updated_at": GetCurrentDateTime(),
+            "collected_at": GetCurrentDateTime(),
+            "status": BillStatusData.APPROVED.value,
+            "approved_by": current_user.email,
+            "approved_at": GetCurrentDateTime(),
+        }
+
+        if assigned_to:
+            collector_data["assigned_to"] = assigned_to
+
+        update_data = {
+            "$set": {
+                "status": BillStatusData.PAID.value,
+                "collector": collector_data,
+            }
+        }
+
+        result = await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
+        if result.modified_count > 0:
+            modified_count += 1
+
+    if modified_count == 0:
+        raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
+
+    return JSONResponse(content={
+        "message": "Tagihan berhasil disetujui dan ditandai sebagai PAID",
+        "modified_count": modified_count
+    })
+
+@router.post("/bill-collector/auto-repeat")
+async def auto_repeat_collector_status(
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase)
 ):
-    result = await db.bills.update_one(
-        {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
-        {"$set": {"status": "collected", "updated_at": datetime.utcnow()}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Bill not found or not modified")
-    return {"message": "Bill marked as collected"}
+    today = GetCurrentDateTime()
 
-@router.post("/bills/{bill_id}/receipt")
-async def upload_receipt(
-    bill_id: str,
-    file: UploadFile = File(...),
-    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
-    current_user: UserData = Depends(GetCurrentUser)
-):
-    # Save the uploaded file to "uploads/" folder
-    uploads_dir = "uploads"
-    os.makedirs(uploads_dir, exist_ok=True)  # Create if not exists
-    file_path = os.path.join(uploads_dir, f"{bill_id}_{file.filename}")
+    query = {
+        "collector.repeat_monthly": True,
+        "collector.status": "COLLECTED",
+        "due_date": {"$lt": today}
+    }
 
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+    invoices = db.invoices.find(query)
 
-    # Update bill with receipt URL
-    result = await db.bills.update_one(
-        {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
-        {"$set": {"receipt_url": file_path, "updated_at": datetime.utcnow()}}
-    )
+    updated_count = 0
+    async for invoice in invoices:
+        current_due = invoice.get("due_date")
+        if not current_due:
+            continue
 
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Bill not found or not modified")
+        new_due_date = current_due + relativedelta(months=1)
 
-    return {"message": "Receipt uploaded successfully", "receipt_url": file_path}
+        update_data = {
+            "$set": {
+                "status": "COLLECTING",
+                "due_date": new_due_date,
+                "collector.status": "COLLECTING",
+                "collector.updated_at": GetCurrentDateTime()
+            },
+            "$unset": {
+                "collector.collected_at": "",
+                "collector.description": ""
+            }
+        }
 
-async def CheckMitraFee(db, customer_data, id_invoice):
-    invoice_data, count = await GetManyData(
-        db.invoices,
-        [{"$match": {"id_customer": ObjectId(customer_data.get("_id"))}}],
-        {"_id": 1},
-    )
-    if count <= 1:
-        return
+        await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
+        updated_count += 1
 
-    if customer_data.get("referral", None):
-        referral_user = await GetOneData(
-            db.users, {"referral": customer_data.get("referral")}
-        )
-        if referral_user and referral_user.get("role") == UserRole.MITRA:
-            package_data = await GetOneData(
-                db.packages,
-                {"_id": ObjectId(customer_data.get("id_package"))},
-            )
-            if package_data:
-                package_fee = package_data.get("price", {}).get("mitra_fee", 0)
-                mitra_fee = referral_user.get("saldo", 0) + package_fee
-                await UpdateOneData(
-                    db.users,
-                    {"referral": customer_data.get("referral")},
-                    {"$set": {"saldo": mitra_fee}},
-                )
-                await CreateOneData(
-                    db.invoice_fees,
-                    {
-                        "id_customer": ObjectId(customer_data.get("_id")),
-                        "id_invoice": ObjectId(id_invoice),
-                        "id_user": ObjectId(referral_user.get("_id")),
-                        "referral": referral_user.get("referral"),
-                        "fee": package_fee,
-                        "created_at": GetCurrentDateTime(),
-                    },
-                )
+    return {
+        "message": "Repeat monthly collector status updated.",
+        "updated_count": updated_count
+    }
+
+# @router.patch("/bills/{bill_id}/pay")
+# async def mark_as_paid(
+#     bill_id: str,
+#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
+#     current_user: UserData = Depends(GetCurrentUser)
+# ):
+#     result = await db.bills.update_one(
+#         {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
+#         {"$set": {"status": "paid", "updated_at": datetime.utcnow()}}
+#     )
+#     if result.modified_count == 0:
+#         raise HTTPException(status_code=404, detail="Bill not found or not modified")
+#     return {"message": "Bill marked as paid"}
+
+# @router.patch("/bills/{bill_id}/collect")
+# async def mark_as_collected(
+#     bill_id: str,
+#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
+#     current_user: UserData = Depends(GetCurrentUser)
+# ):
+#     result = await db.bills.update_one(
+#         {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
+#         {"$set": {"status": "collected", "updated_at": datetime.utcnow()}}
+#     )
+#     if result.modified_count == 0:
+#         raise HTTPException(status_code=404, detail="Bill not found or not modified")
+#     return {"message": "Bill marked as collected"}
+
+# @router.post("/bills/{bill_id}/receipt")
+# async def upload_receipt(
+#     bill_id: str,
+#     file: UploadFile = File(...),
+#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
+#     current_user: UserData = Depends(GetCurrentUser)
+# ):
+#     # Save the uploaded file to "uploads/" folder
+#     uploads_dir = "uploads"
+#     os.makedirs(uploads_dir, exist_ok=True)  # Create if not exists
+#     file_path = os.path.join(uploads_dir, f"{bill_id}_{file.filename}")
+
+#     with open(file_path, "wb") as f:
+#         f.write(await file.read())
+
+#     # Update bill with receipt URL
+#     result = await db.bills.update_one(
+#         {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
+#         {"$set": {"receipt_url": file_path, "updated_at": datetime.utcnow()}}
+#     )
+
+#     if result.modified_count == 0:
+#         raise HTTPException(status_code=404, detail="Bill not found or not modified")
+
+#     return {"message": "Receipt uploaded successfully", "receipt_url": file_path}
+
+# async def CheckMitraFee(db, customer_data, id_invoice):
+#     invoice_data, count = await GetManyData(
+#         db.invoices,
+#         [{"$match": {"id_customer": ObjectId(customer_data.get("_id"))}}],
+#         {"_id": 1},
+#     )
+#     if count <= 1:
+#         return
+
+#     if customer_data.get("referral", None):
+#         referral_user = await GetOneData(
+#             db.users, {"referral": customer_data.get("referral")}
+#         )
+#         if referral_user and referral_user.get("role") == UserRole.MITRA:
+#             package_data = await GetOneData(
+#                 db.packages,
+#                 {"_id": ObjectId(customer_data.get("id_package"))},
+#             )
+#             if package_data:
+#                 package_fee = package_data.get("price", {}).get("mitra_fee", 0)
+#                 mitra_fee = referral_user.get("saldo", 0) + package_fee
+#                 await UpdateOneData(
+#                     db.users,
+#                     {"referral": customer_data.get("referral")},
+#                     {"$set": {"saldo": mitra_fee}},
+#                 )
+#                 await CreateOneData(
+#                     db.invoice_fees,
+#                     {
+#                         "id_customer": ObjectId(customer_data.get("_id")),
+#                         "id_invoice": ObjectId(id_invoice),
+#                         "id_user": ObjectId(referral_user.get("_id")),
+#                         "referral": referral_user.get("referral"),
+#                         "fee": package_fee,
+#                         "created_at": GetCurrentDateTime(),
+#                     },
+#                 )
