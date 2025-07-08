@@ -532,3 +532,67 @@ async def SendWhatsappFeeRequestedMessage(db, name: str, nominal: int, reason: s
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         await CreateWhatsappErrorNotification(db, str(e))
+
+async def SendWhatsappPaymentSuccessBillMessage(db, id_invoice):
+    try:
+        invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+        whatsapp_bot = await GetOneData(db.configurations, {"type": "WHATSAPP_BOT"})
+        whatsapp_message = await GetOneData(
+            db.configurations, {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
+        )
+        customer_data = await GetOneData(
+            db.customers, {"_id": ObjectId(invoice_data.get("id_customer"))}
+        )
+
+        if (
+            not invoice_data
+            or not whatsapp_bot
+            or not whatsapp_message
+            or not customer_data
+        ):
+            return
+
+        message = whatsapp_message.get("paid", "")
+
+        # ✅ Tangani bulan secara dinamis
+        try:
+            bulan_str = MONTH_DICTIONARY[int(invoice_data.get("month"))]
+        except Exception:
+            bulan_str = "-"
+
+        # 🔁 Siapkan field pengganti
+        fields_to_replace = {
+            "[nama_pelanggan]": customer_data.get("name", "-"),
+            "[no_servis]": customer_data.get("service_number", "-"),
+            "[nama_paket]": ", ".join([
+                pkg.get("name", "-") for pkg in invoice_data.get("package", [])
+            ]),
+            "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
+            "[status]": "SUDAH DIBAYAR",
+            "[hari]": GetCurrentDateTime().strftime("%d"),
+            "[bulan]": bulan_str,
+            "[tahun]": GetCurrentDateTime().strftime("%Y"),
+            "[metode_bayar]": invoice_data.get("payment", {}).get("method", "-"),
+            "[thanks_wa]": whatsapp_message.get("advance", {}).get("thanks_message", ""),
+        }
+
+        # 🔁 Ganti semua placeholder
+        for key, value in fields_to_replace.items():
+            try:
+                message = message.replace(key, str(value))
+            except Exception:
+                message = message.replace(key, "-")
+
+        # 🔗 Kirim ke WhatsApp Gateway
+        params = {
+            "api_key": WHATSAPP_API_KEY,
+            "sender": WHATSAPP_BOT_NUMBER,
+            "number": f"62{str(customer_data.get('phone_number', '')).lstrip('0')}",
+            "message": message,
+        }
+
+        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
+        requests.post(whatsapp_api_url, json=params, timeout=60)
+
+    except Exception as e:
+        await CreateWhatsappErrorNotification(db, str(e))

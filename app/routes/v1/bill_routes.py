@@ -11,6 +11,7 @@ from app.models.customers import CustomerStatusData
 from app.models.notifications import NotificationTypeData
 from typing import Optional, List
 from dateutil.relativedelta import relativedelta
+from app.models.payments import PaymentMethodData
 
 from app.modules.crud_operations import (
     CreateOneData,
@@ -21,6 +22,9 @@ from app.modules.crud_operations import (
     GetOneData,
     UpdateManyData,
     UpdateOneData,
+)
+from app.modules.whatsapp_message import (
+    SendWhatsappPaymentSuccessBillMessage,
 )
 from app.models.bill import (
     BillPayOffData,
@@ -51,6 +55,82 @@ def convert_objectid(doc):
 
 router = APIRouter(prefix="/bills", tags=["Bill Collector"])
 
+# @router.get("")
+# async def get_bills(
+#     id_customer: str = None,
+#     key: str = None,
+#     month: str = None,
+#     year: str = None,
+#     status: str = None,
+#     page: int = 1,
+#     items: int = 10,
+#     sort_key: str = "due_date",
+#     sort_direction: str = "asc",
+#     current_user: UserData = Depends(GetCurrentUser),
+#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase)
+# ):
+#     query: Dict[str, Any] = {}
+
+#     if id_customer:
+#         query["id_customer"] = ObjectId(id_customer)
+
+#     if key:
+#         query["$or"] = [
+#             {"name": {"$regex": key, "$options": "i"}},
+#             {
+#                 "$expr": {
+#                     "$regexMatch": {
+#                         "input": {"$toString": "$service_number"},
+#                         "regex": key,
+#                         "options": "i",
+#                     }
+#                 }
+#             },
+#         ]
+
+#     if status:
+#         query["collector.status"] = status
+#     else:
+#         query["collector.status"] = {"$in": ["COLLECTING", "COLLECTED", "APPROVED"]}
+
+
+#     if month:
+#         query["month"] = month
+#     if year:
+#         query["year"] = year
+
+#     pipeline = [
+#         {"$match": query},
+#         {"$addFields": {"status": "$collector.status"}},
+#         {
+#             "$lookup": {
+#                 "from": "customers",
+#                 "let": {"customerId": "$id_customer"},
+#                 "pipeline": [
+#                     {"$match": {"$expr": {"$eq": ["$_id", "$$customerId"]}}},
+#                     {"$project": {"name": 1, "status": 1}},
+#                 ],
+#                 "as": "customer",
+#             }
+#         },
+#         {"$unwind": "$customer"},
+#         {"$sort": {sort_key: 1 if sort_direction == "asc" else -1}},
+#     ]
+
+#     bill_data, count = await GetManyData(
+#         db.invoices, pipeline, {}, {"page": page, "items": items}
+#     )
+
+#     return JSONResponse(
+#         content={
+#             "bill_data": bill_data,
+#             "pagination_info": {
+#                 "page": page,
+#                 "items": items,
+#                 "count": count,
+#             },
+#         }
+#     )
 @router.get("")
 async def get_bills(
     id_customer: str = None,
@@ -67,9 +147,11 @@ async def get_bills(
 ):
     query: Dict[str, Any] = {}
 
+    # Filter berdasarkan ID Customer
     if id_customer:
         query["id_customer"] = ObjectId(id_customer)
 
+    # Filter pencarian berdasarkan nama atau service_number
     if key:
         query["$or"] = [
             {"name": {"$regex": key, "$options": "i"}},
@@ -84,16 +166,21 @@ async def get_bills(
             },
         ]
 
+    # Filter status
     if status:
         query["collector.status"] = status
     else:
         query["collector.status"] = {"$in": ["COLLECTING", "COLLECTED", "APPROVED"]}
 
-
+    # Filter bulan dan tahun
     if month:
         query["month"] = month
     if year:
         query["year"] = year
+
+    # 🔐 Filter berdasarkan role user
+    if current_user.role != 1:
+        query["collector.assigned_to"] = current_user.email
 
     pipeline = [
         {"$match": query},
@@ -128,7 +215,6 @@ async def get_bills(
         }
     )
 
-
 @router.get("/detail/{id}")
 async def get_bill_detail(
     id: str,
@@ -151,6 +237,7 @@ async def get_bill_detail(
             "month": 1,
             "year": 1,
             "package": 1,
+            "unique_code" : 1,
             "add_on_packages": 1,
             "payment": 1,
             "customer": 1,
@@ -259,6 +346,60 @@ async def pay_off_bill(
     return JSONResponse(content={"message": "Tagihan telah dilunasi."})
 
 
+# @router.put("/mark-collected")
+# async def mark_bill_as_collected(
+#     data: MarkCollectedBody,
+#     current_user: UserData = Depends(GetCurrentUser),
+#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+# ):
+#     # 🔍 Decode & validate ID
+#     try:
+#         decoded = base64.b64decode(data.id).decode("utf-8")
+#         id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
+#         if not id_list:
+#             raise ValueError
+#     except Exception:
+#         raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
+
+#     invoices = await db.invoices.find({"_id": {"$in": id_list}}).to_list(length=len(id_list))
+
+#     if not invoices:
+#         raise HTTPException(status_code=404, detail={"message": "Invoices not found."})
+
+#     modified_count = 0
+
+#     for invoice in invoices:
+#         assigned_to = invoice.get("collector", {}).get("assigned_to")
+
+#         collector_data = {
+#             "description": data.description,
+#             "updated_by": current_user.email,
+#             "updated_at": GetCurrentDateTime(),
+#             "collected_at": GetCurrentDateTime(),
+#             "status": BillStatusData.COLLECTED.value,
+#         }
+
+#         if assigned_to:
+#             collector_data["assigned_to"] = assigned_to
+
+#         update_data = {
+#             "$set": {
+#                 "status": BillStatusData.PAID.value,
+#                 "collector": collector_data,
+#             }
+#         }
+
+#         result = await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
+#         if result.modified_count > 0:
+#             modified_count += 1
+
+#     if modified_count == 0:
+#         raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
+
+#     return JSONResponse(content={
+#         "message": "Tagihan berhasil ditandai sebagai COLLECTED",
+#         "modified_count": modified_count
+#     })
 @router.put("/mark-collected")
 async def mark_bill_as_collected(
     data: MarkCollectedBody,
@@ -299,12 +440,38 @@ async def mark_bill_as_collected(
             "$set": {
                 "status": BillStatusData.PAID.value,
                 "collector": collector_data,
+                "payment": {
+                    "method": PaymentMethodData.CASH.value,
+                    "description": data.description,
+                    "paid_at": GetCurrentDateTime(),
+                    "confirmed_by": current_user.email,
+                    "confirmed_at": GetCurrentDateTime(),
+                }
             }
         }
 
         result = await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
         if result.modified_count > 0:
             modified_count += 1
+
+            invoice_id = invoice["_id"]
+
+            await SendWhatsappPaymentSuccessBillMessage(db, invoice_id)
+
+            updated_invoice = await GetOneData(db.invoices, {"_id": invoice_id})
+            if updated_invoice:
+                customer = await GetOneData(db.customers, {"_id": ObjectId(updated_invoice["id_customer"])})
+                if customer:
+                    status = customer.get("status")
+
+                    if status != CustomerStatusData.ACTIVE and status == CustomerStatusData.FREE:
+                        await UpdateOneData(
+                            db.customers,
+                            {"_id": customer["_id"]},
+                            {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+                        )
+                        await ActivateMikrotikPPPSecret(db, customer, False)
+
 
     if modified_count == 0:
         raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
