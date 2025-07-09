@@ -16,6 +16,8 @@ from app.models.payments import (
     PaymentPayOffData,
     RequestConfirmData,
 )
+from app.models.bill import BillStatusData
+ 
 from app.models.customers import CustomerStatusData
 from app.modules.response_message import NOT_FOUND_MESSAGE, SYSTEM_ERROR_MESSAGE
 from fastapi.responses import JSONResponse
@@ -99,6 +101,89 @@ async def CheckMitraFee(db, customer_data, id_invoice):
                 )
 
 
+# @router.put("/pay-off/{id}")
+# async def pay_off_payment(
+#     id: str,
+#     data: PaymentPayOffData = Body(..., embed=True),
+#     current_user: UserData = Depends(GetCurrentUser),
+#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+# ):
+#     invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
+#     if not invoice_data:
+#         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+#     payload = data.dict(exclude_unset=True)
+#     invoice_data["amount"] = (
+#         invoice_data["package_amount"]
+#         + invoice_data["add_on_package_amount"]
+#         + payload["unique_code"]
+#     )
+#     update_data = {
+#         "status": InvoiceStatusData.PAID,
+#         "unique_code": payload["unique_code"],
+#         "amount": invoice_data["amount"],
+#         "payment": {
+#             "method": payload["method"],
+#             "description": payload["description"],
+#             "paid_at": GetCurrentDateTime(),
+#             "confirmed_by": current_user.email,
+#             "confirmed_at": GetCurrentDateTime(),
+#         },
+#     }
+#     if "image_url" in payload:
+#         update_data["payment"]["image_url"] = payload["image_url"]
+
+#     result = await UpdateOneData(
+#         db.invoices,
+#         {"_id": ObjectId(id)},
+#         {"$set": update_data},
+#         upsert=True,
+#     )
+#     if not result:
+#         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
+
+#     income_data = {
+#         "id_invoice": ObjectId(id),
+#         "nominal": invoice_data.get("amount", 0),
+#         "category": "BAYAR TAGIHAN",
+#         "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
+#         "method": payload["method"],
+#         "date": GetCurrentDateTime(),
+#         "id_receiver": ObjectId(current_user.id),
+#         "created_at": GetCurrentDateTime(),
+#     }
+#     await UpdateOneData(
+#         db.incomes, {"id_invoice": ObjectId(id)}, {"$set": income_data}, upsert=True
+#     )
+
+#     await SendWhatsappPaymentSuccessMessage(db, id)
+#     await SendTelegramPaymentMessage(db, id)
+
+#     customer_data = await GetOneData(
+#         db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
+#     )
+#     if customer_data:
+#         status = customer_data.get("status", None)
+#         if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
+#             await UpdateOneData(
+#                 db.customers,
+#                 {"_id": ObjectId(invoice_data["id_customer"])},
+#                 {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+#             )
+#             await ActivateMikrotikPPPSecret(db, customer_data, False)
+
+#         await CheckMitraFee(db, customer_data, id)
+
+#     notification_data = {
+#         "id_user": ObjectId(customer_data["id_user"]),
+#         "title": "Tagihan Telah Dibayar",
+#         "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
+#         "type": NotificationTypeData.OTHER.value,
+#         "is_read": 0,
+#         "created_at": GetCurrentDateTime(),
+#     }
+#     await CreateOneData(db.notifications, notification_data)
+#     return JSONResponse(content={"message": "Pembayaran Telah Dilunasi!"})
 @router.put("/pay-off/{id}")
 async def pay_off_payment(
     id: str,
@@ -116,6 +201,9 @@ async def pay_off_payment(
         + invoice_data["add_on_package_amount"]
         + payload["unique_code"]
     )
+
+    now = GetCurrentDateTime()
+
     update_data = {
         "status": InvoiceStatusData.PAID,
         "unique_code": payload["unique_code"],
@@ -123,13 +211,19 @@ async def pay_off_payment(
         "payment": {
             "method": payload["method"],
             "description": payload["description"],
-            "paid_at": GetCurrentDateTime(),
+            "paid_at": now,
             "confirmed_by": current_user.email,
-            "confirmed_at": GetCurrentDateTime(),
+            "confirmed_at": now,
         },
     }
+
     if "image_url" in payload:
         update_data["payment"]["image_url"] = payload["image_url"]
+
+    if "collector" in invoice_data and invoice_data["collector"]:
+        collector_data = invoice_data["collector"]
+        collector_data["status"] = BillStatusData.APPROVED.value
+        update_data["collector"] = collector_data
 
     result = await UpdateOneData(
         db.invoices,
@@ -146,9 +240,9 @@ async def pay_off_payment(
         "category": "BAYAR TAGIHAN",
         "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
         "method": payload["method"],
-        "date": GetCurrentDateTime(),
+        "date": now,
         "id_receiver": ObjectId(current_user.id),
-        "created_at": GetCurrentDateTime(),
+        "created_at": now,
     }
     await UpdateOneData(
         db.incomes, {"id_invoice": ObjectId(id)}, {"$set": income_data}, upsert=True
@@ -162,7 +256,7 @@ async def pay_off_payment(
     )
     if customer_data:
         status = customer_data.get("status", None)
-        if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
+        if status != CustomerStatusData.ACTIVE and status == CustomerStatusData.FREE:
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice_data["id_customer"])},
@@ -172,15 +266,16 @@ async def pay_off_payment(
 
         await CheckMitraFee(db, customer_data, id)
 
-    notification_data = {
-        "id_user": ObjectId(customer_data["id_user"]),
-        "title": "Tagihan Telah Dibayar",
-        "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dkonfirmasi!",
-        "type": NotificationTypeData.OTHER.value,
-        "is_read": 0,
-        "created_at": GetCurrentDateTime(),
-    }
-    await CreateOneData(db.notifications, notification_data)
+        notification_data = {
+            "id_user": ObjectId(customer_data["id_user"]),
+            "title": "Tagihan Telah Dibayar",
+            "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data.get('amount', 0))} telah dikonfirmasi!",
+            "type": NotificationTypeData.OTHER.value,
+            "is_read": 0,
+            "created_at": now,
+        }
+        await CreateOneData(db.notifications, notification_data)
+
     return JSONResponse(content={"message": "Pembayaran Telah Dilunasi!"})
 
 

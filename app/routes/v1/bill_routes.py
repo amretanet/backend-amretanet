@@ -12,6 +12,7 @@ from app.models.notifications import NotificationTypeData
 from typing import Optional, List
 from dateutil.relativedelta import relativedelta
 from app.models.payments import PaymentMethodData
+from app.models.users import UserData, UserRole
 
 from app.modules.crud_operations import (
     CreateOneData,
@@ -386,12 +387,38 @@ async def pay_off_bill(
 #             "$set": {
 #                 "status": BillStatusData.PAID.value,
 #                 "collector": collector_data,
+#                 "payment": {
+#                     "method": PaymentMethodData.CASH.value,
+#                     "description": data.description,
+#                     "paid_at": GetCurrentDateTime(),
+#                     "confirmed_by": current_user.email,
+#                     "confirmed_at": GetCurrentDateTime(),
+#                 }
 #             }
 #         }
 
 #         result = await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
 #         if result.modified_count > 0:
 #             modified_count += 1
+
+#             invoice_id = invoice["_id"]
+
+#             await SendWhatsappPaymentSuccessBillMessage(db, invoice_id)
+
+#             updated_invoice = await GetOneData(db.invoices, {"_id": invoice_id})
+#             if updated_invoice:
+#                 customer = await GetOneData(db.customers, {"_id": ObjectId(updated_invoice["id_customer"])})
+#                 if customer:
+#                     status = customer.get("status")
+
+#                     if status != CustomerStatusData.ACTIVE and status == CustomerStatusData.FREE:
+#                         await UpdateOneData(
+#                             db.customers,
+#                             {"_id": customer["_id"]},
+#                             {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+#                         )
+#                         await ActivateMikrotikPPPSecret(db, customer, False)
+
 
 #     if modified_count == 0:
 #         raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
@@ -406,7 +433,6 @@ async def mark_bill_as_collected(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    # 🔍 Decode & validate ID
     try:
         decoded = base64.b64decode(data.id).decode("utf-8")
         id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
@@ -423,13 +449,14 @@ async def mark_bill_as_collected(
     modified_count = 0
 
     for invoice in invoices:
+        now = GetCurrentDateTime()
         assigned_to = invoice.get("collector", {}).get("assigned_to")
 
         collector_data = {
             "description": data.description,
             "updated_by": current_user.email,
-            "updated_at": GetCurrentDateTime(),
-            "collected_at": GetCurrentDateTime(),
+            "updated_at": now,
+            "collected_at": now,
             "status": BillStatusData.COLLECTED.value,
         }
 
@@ -443,9 +470,9 @@ async def mark_bill_as_collected(
                 "payment": {
                     "method": PaymentMethodData.CASH.value,
                     "description": data.description,
-                    "paid_at": GetCurrentDateTime(),
+                    "paid_at": now,
                     "confirmed_by": current_user.email,
-                    "confirmed_at": GetCurrentDateTime(),
+                    "confirmed_at": now,
                 }
             }
         }
@@ -463,7 +490,6 @@ async def mark_bill_as_collected(
                 customer = await GetOneData(db.customers, {"_id": ObjectId(updated_invoice["id_customer"])})
                 if customer:
                     status = customer.get("status")
-
                     if status != CustomerStatusData.ACTIVE and status == CustomerStatusData.FREE:
                         await UpdateOneData(
                             db.customers,
@@ -472,9 +498,26 @@ async def mark_bill_as_collected(
                         )
                         await ActivateMikrotikPPPSecret(db, customer, False)
 
+                notification_data = {
+                    "id_invoice": invoice_id,
+                    "type": NotificationTypeData.PAYMENT_CONFIRM.value,
+                    "title": "Pembayaran Dikonfirmasi",
+                    "description": f"{customer.get('name', 'Pelanggan')} telah membayar tagihan dan bill telah diambil oleh {current_user.name}.",
+                    "is_read": 0,
+                    "created_at": now,
+                }
+
+                admin_users = await GetAggregateData(
+                    db.users,
+                    [{"$match": {"role": UserRole.ADMIN}}]
+                )
+
+                for user in admin_users:
+                    notification_data["id_user"] = ObjectId(user["_id"])
+                    await CreateOneData(db.notifications, notification_data.copy())
 
     if modified_count == 0:
-        raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
+        raise HTTPException(status_code=400, detail={"message": "Tidak ada tagihan yang berhasil diperbarui."})
 
     return JSONResponse(content={
         "message": "Tagihan berhasil ditandai sebagai COLLECTED",
@@ -583,94 +626,35 @@ async def auto_repeat_collector_status(
         "updated_count": updated_count
     }
 
-# @router.patch("/bills/{bill_id}/pay")
-# async def mark_as_paid(
-#     bill_id: str,
-#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
-#     current_user: UserData = Depends(GetCurrentUser)
-# ):
-#     result = await db.bills.update_one(
-#         {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
-#         {"$set": {"status": "paid", "updated_at": datetime.utcnow()}}
-#     )
-#     if result.modified_count == 0:
-#         raise HTTPException(status_code=404, detail="Bill not found or not modified")
-#     return {"message": "Bill marked as paid"}
+@router.delete("/delete")
+async def delete_invoice_collector_data(
+    id: str,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    if current_user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=403, detail={"message": FORBIDDEN_ACCESS_MESSAGE}
+        )
 
-# @router.patch("/bills/{bill_id}/collect")
-# async def mark_as_collected(
-#     bill_id: str,
-#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
-#     current_user: UserData = Depends(GetCurrentUser)
-# ):
-#     result = await db.bills.update_one(
-#         {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
-#         {"$set": {"status": "collected", "updated_at": datetime.utcnow()}}
-#     )
-#     if result.modified_count == 0:
-#         raise HTTPException(status_code=404, detail="Bill not found or not modified")
-#     return {"message": "Bill marked as collected"}
+    try:
+        decoded_id = base64.b64decode(id).decode("utf-8")
+        id_list = [ObjectId(item.strip()) for item in decoded_id.split(",") if item.strip()]
+    except Exception:
+        raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
 
-# @router.post("/bills/{bill_id}/receipt")
-# async def upload_receipt(
-#     bill_id: str,
-#     file: UploadFile = File(...),
-#     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
-#     current_user: UserData = Depends(GetCurrentUser)
-# ):
-#     # Save the uploaded file to "uploads/" folder
-#     uploads_dir = "uploads"
-#     os.makedirs(uploads_dir, exist_ok=True)  # Create if not exists
-#     file_path = os.path.join(uploads_dir, f"{bill_id}_{file.filename}")
+    result = await db.invoices.update_many(
+        {"_id": {"$in": id_list}},
+        {"$unset": {"collector": ""}}
+    )
 
-#     with open(file_path, "wb") as f:
-#         f.write(await file.read())
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=404, detail={"message": "Tidak ada data collector yang dihapus."}
+        )
 
-#     # Update bill with receipt URL
-#     result = await db.bills.update_one(
-#         {"_id": ObjectId(bill_id), "customer_id": str(current_user.id)},
-#         {"$set": {"receipt_url": file_path, "updated_at": datetime.utcnow()}}
-#     )
-
-#     if result.modified_count == 0:
-#         raise HTTPException(status_code=404, detail="Bill not found or not modified")
-
-#     return {"message": "Receipt uploaded successfully", "receipt_url": file_path}
-
-# async def CheckMitraFee(db, customer_data, id_invoice):
-#     invoice_data, count = await GetManyData(
-#         db.invoices,
-#         [{"$match": {"id_customer": ObjectId(customer_data.get("_id"))}}],
-#         {"_id": 1},
-#     )
-#     if count <= 1:
-#         return
-
-#     if customer_data.get("referral", None):
-#         referral_user = await GetOneData(
-#             db.users, {"referral": customer_data.get("referral")}
-#         )
-#         if referral_user and referral_user.get("role") == UserRole.MITRA:
-#             package_data = await GetOneData(
-#                 db.packages,
-#                 {"_id": ObjectId(customer_data.get("id_package"))},
-#             )
-#             if package_data:
-#                 package_fee = package_data.get("price", {}).get("mitra_fee", 0)
-#                 mitra_fee = referral_user.get("saldo", 0) + package_fee
-#                 await UpdateOneData(
-#                     db.users,
-#                     {"referral": customer_data.get("referral")},
-#                     {"$set": {"saldo": mitra_fee}},
-#                 )
-#                 await CreateOneData(
-#                     db.invoice_fees,
-#                     {
-#                         "id_customer": ObjectId(customer_data.get("_id")),
-#                         "id_invoice": ObjectId(id_invoice),
-#                         "id_user": ObjectId(referral_user.get("_id")),
-#                         "referral": referral_user.get("referral"),
-#                         "fee": package_fee,
-#                         "created_at": GetCurrentDateTime(),
-#                     },
-#                 )
+    return JSONResponse(
+        content={
+            "message": f"Data collector berhasil dihapus dari {result.modified_count} tagihan."
+        }
+    )
