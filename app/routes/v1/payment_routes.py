@@ -256,12 +256,13 @@ async def pay_off_payment(
     )
     if customer_data:
         status = customer_data.get("status", None)
-        if status != CustomerStatusData.ACTIVE and status == CustomerStatusData.FREE:
+        if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
             await UpdateOneData(
                 db.customers,
                 {"_id": ObjectId(invoice_data["id_customer"])},
                 {"$set": {"status": CustomerStatusData.ACTIVE.value}},
             )
+            
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
         await CheckMitraFee(db, customer_data, id)
