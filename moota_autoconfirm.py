@@ -1,4 +1,5 @@
 import asyncio
+import time
 from bson import ObjectId
 from app.models.customers import CustomerStatusData
 from fastapi.responses import JSONResponse
@@ -18,14 +19,22 @@ load_dotenv()
 
 AUTOCONFIRM_USER_ID = os.getenv("AUTOCONFIRM_USER_ID")
 AUTOCONFIRM_USER_EMAIL = os.getenv("AUTOCONFIRM_USER_EMAIL")
+
 AMRETA_DB_URI = os.getenv("AMRETA_DB_URI")
 AMRETA_DB_NAME = os.getenv("AMRETA_DB_NAME")
+
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
+
 WHATSAPP_ADMIN_NUMBER = os.getenv("WHATSAPP_ADMIN_NUMBER")
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
+
+BABLAST_API_URL = os.getenv("BABLAST_API_URL")
+BABLAST_API_TOKEN = os.getenv("BABLAST_API_TOKEN")
+
 MPWA_API_TOKEN = os.getenv("MPWA_API_TOKEN")
 MPWA_API_URL = os.getenv("MPWA_API_URL")
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_INSTALLATION_THREAD_ID = os.getenv("TELEGRAM_INSTALLATION_THREAD_ID")
@@ -63,19 +72,19 @@ def send_whatsapp_payment_success(id_invoice):
     try:
         invoice_data = db.invoices.find_one({"_id": id_invoice})
         whatsapp_bot = db.configurations.find_one({"type": "WHATSAPP_BOT"})
-        whatsapp_message = db.configurations.find_one(
+        whatsapp_config = db.configurations.find_one(
             {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
         )
         customer_data = db.customers.find_one({"_id": invoice_data["id_customer"]})
         if (
             not invoice_data
             or not whatsapp_bot
-            or not whatsapp_message
+            or not whatsapp_config
             or not customer_data
         ):
             return
 
-        message = whatsapp_message.get("paid", "")
+        message = whatsapp_config.get("paid", "")
         fields_to_replace = {
             "[nama_pelanggan]": customer_data.get("name", "-"),
             "[no_servis]": customer_data.get("service_number", "-"),
@@ -86,9 +95,7 @@ def send_whatsapp_payment_success(id_invoice):
             "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
             "[tahun]": GetCurrentDateTime().strftime("%Y"),
             "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
-            "[thanks_wa]": whatsapp_message.get("advance", "").get(
-                "thanks_message", ""
-            ),
+            "[thanks_wa]": whatsapp_config.get("advance", "").get("thanks_message", ""),
         }
 
         for key, value in fields_to_replace.items():
@@ -97,14 +104,29 @@ def send_whatsapp_payment_success(id_invoice):
             except Exception:
                 message = message.replace(key, "-")
 
-        params = {
-            "api_key": MPWA_API_TOKEN,
-            "sender": WHATSAPP_BOT_NUMBER,
-            "number": f"62{customer_data['phone_number']}",
-            "message": message,
-        }
-        whatsapp_api_url = f"{MPWA_API_URL}/send-message"
-        requests.post(whatsapp_api_url, json=params, timeout=60)
+        whatsapp_gateway = whatsapp_config.get("advance", {}).get("whatsapp_gateway")
+        if whatsapp_gateway == "MPWA":
+            body = {
+                "api_key": MPWA_API_TOKEN,
+                "sender": WHATSAPP_BOT_NUMBER,
+                "number": f"62{customer_data['phone_number']}",
+                "message": message,
+            }
+            url = f"{MPWA_API_URL}/send-message"
+            requests.post(url, json=body, timeout=15)
+        else:
+            url = f"{BABLAST_API_URL}/send"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {BABLAST_API_TOKEN}",
+            }
+            body = {
+                "phone": f"62{customer_data['phone_number']}",
+                "message": message,
+            }
+            requests.post(url=url, headers=headers, json=body, timeout=15)
+
+        time.sleep(30)
     except Exception as e:
         print(str(e))
 
