@@ -1,6 +1,18 @@
+from typing import Any
+from datetime import datetime
+from bson import ObjectId
 from app.models.generals import Pagination
-from app.modules.generals import JsonObjectFormatter
 import json
+
+
+def JsonObjectFormatter(obj: Any):
+    if isinstance(obj, ObjectId):
+        return str(obj)
+
+    if isinstance(obj, datetime):
+        return str(obj)
+
+    raise TypeError("%r is not JSON serializable" % obj)
 
 
 async def GetDistinctData(v_db_collection, v_query=None, v_field="_id"):

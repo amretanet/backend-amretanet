@@ -8,6 +8,7 @@ import pytz
 from typing import Any
 import secrets
 import string
+from app.modules.crud_operations import GetDistinctData
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -90,6 +91,20 @@ def RemoveFilePath(file_path: str):
 def GenerateReferralCode(unique_data):
     referral_code = hashlib.md5(unique_data.encode())
     return referral_code.hexdigest()[:10].upper()
+
+
+async def GenerateUniqueCode(db):
+    used_unique_code = await GetDistinctData(db.customers, {}, "unique_code")
+    max_code = max(used_unique_code)
+    if not max_code:
+        max_code = 0
+
+    new_unique_code = max_code + 1
+
+    while new_unique_code % 10 == 0:
+        new_unique_code += 1
+
+    return new_unique_code
 
 
 def GenerateRandomString(unique_data, length: int = 10):
@@ -190,16 +205,6 @@ def ReminderDateFormatter(due_date):
         return five_days_before.strftime("%d")
     except ValueError:
         return None
-
-
-def JsonObjectFormatter(obj: Any):
-    if isinstance(obj, ObjectId):
-        return str(obj)
-
-    if isinstance(obj, datetime):
-        return str(obj)
-
-    raise TypeError("%r is not JSON serializable" % obj)
 
 
 def GetCurrentDateTime():
