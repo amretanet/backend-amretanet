@@ -20,6 +20,7 @@ CustomerProjections = {
     "package": 1,
     "add_on_packages": 1,
     "registered_at": 1,
+    "unique_code": 1,
 }
 
 
@@ -27,6 +28,7 @@ CustomerProjections = {
 class CustomerSortingsData(str, Enum):
     NAME = "name"
     SERVICE_NUMBER = "service_number"
+    UNIQUE_CODE = "unique_code"
     ODP_NAME = "odp_name"
     DUE_DATE = "due_date"
     REGISTERED_AT = "registered_at"

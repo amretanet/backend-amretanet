@@ -1,7 +1,6 @@
 import base64
 from calendar import monthrange
 from datetime import datetime, timedelta
-import time
 from dateutil.relativedelta import relativedelta
 from typing import Optional, List
 import asyncio
@@ -59,27 +58,6 @@ load_dotenv()
 
 PPN = int(os.getenv("PPN"))
 PAID_LEAVE_PERCENTAGE = int(os.getenv("PAID_LEAVE_PERCENTAGE"))
-
-
-async def GetUniqueCode(db, sub_amount: int):
-    current_unique_code = 1
-    unique_code = await GetOneData(
-        db.configurations, {"type": "INVOICE_UNIQUE_CODE", "amount": sub_amount}
-    )
-    if unique_code:
-        current_unique_code = unique_code.get("value", 1)
-
-    next_unique_code = current_unique_code + 1
-    if current_unique_code >= 999:
-        next_unique_code = 1
-
-    await UpdateOneData(
-        db.configurations,
-        {"type": "INVOICE_UNIQUE_CODE", "amount": sub_amount},
-        {"$set": {"value": next_unique_code}},
-        upsert=True,
-    )
-    return current_unique_code
 
 
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
@@ -304,6 +282,7 @@ async def generate_invoice(
                 "add_on_package_amount": 1,
                 "amount": 1,
                 "status": 1,
+                "unique_code": 1,
             }
         }
     )
@@ -338,7 +317,7 @@ async def generate_invoice(
                 invoice_exist += 1
                 continue
 
-            current_unique_code = await GetUniqueCode(db, customer["amount"])
+            unique_code = customer.get("unique_code", 1)
             ppn = 0
             paid_leave_discount = 0
             if customer.get("ppn", 0):
@@ -350,7 +329,7 @@ async def generate_invoice(
                 )
                 customer["amount"] = customer["amount"] - paid_leave_discount
 
-            final_amount = customer["amount"] + ppn + current_unique_code
+            final_amount = customer["amount"] + ppn + unique_code
             invoice_data = {
                 "id_customer": ObjectId(customer["_id"]),
                 "name": customer["name"],
@@ -367,7 +346,7 @@ async def generate_invoice(
                 "package_amount": customer["package_amount"],
                 "add_on_package_amount": customer["add_on_package_amount"],
                 "ppn": ppn,
-                "unique_code": current_unique_code,
+                "unique_code": unique_code,
                 "amount": final_amount,
                 "created_at": GetCurrentDateTime(),
             }
@@ -791,6 +770,7 @@ async def create_invoice(
                 "add_on_package_amount": 1,
                 "amount": 1,
                 "status": 1,
+                "unique_code": 1,
             }
         }
     )
@@ -806,7 +786,7 @@ async def create_invoice(
         if int(customer_due_date) > max_date_of_month:
             customer_due_date = str(max_date_of_month).zfill(2)
 
-        current_unique_code = await GetUniqueCode(db, customer["amount"])
+        unique_code = customer.get("unique_code", 1)
         ppn = 0
         paid_leave_discount = 0
         if customer.get("ppn", 0):
@@ -818,7 +798,7 @@ async def create_invoice(
             )
             customer["amount"] = customer["amount"] - paid_leave_discount
 
-        final_amount = customer["amount"] + ppn + current_unique_code
+        final_amount = customer["amount"] + ppn + unique_code
         invoice_data = {
             "id_customer": ObjectId(customer["_id"]),
             "name": customer["name"],
@@ -835,7 +815,7 @@ async def create_invoice(
             "package_amount": customer["package_amount"],
             "add_on_package_amount": customer["add_on_package_amount"],
             "ppn": ppn,
-            "unique_code": current_unique_code,
+            "unique_code": unique_code,
             "amount": final_amount,
             "created_at": GetCurrentDateTime(),
         }
@@ -987,6 +967,7 @@ async def update_invoice(
                     "add_on_packages": 1,
                     "add_on_package_amount": 1,
                     "amount": 1,
+                    "unique_code": 1,
                 }
             }
         )

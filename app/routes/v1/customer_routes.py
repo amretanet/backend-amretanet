@@ -27,6 +27,7 @@ from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 from app.modules.generals import (
     GenerateRandomString,
     GenerateReferralCode,
+    GenerateUniqueCode,
     GetCurrentDateTime,
 )
 from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
@@ -716,6 +717,7 @@ async def register_customer(
     try:
         payload = data.dict(exclude_unset=True)
         payload["service_number"] = DEFAULT_SERVICE_NUMBER
+        payload["unique_code"] = await GenerateUniqueCode(db)
         lates_service_number = await GetOneData(
             db.customers,
             {"service_number": {"$exists": True}},
@@ -921,6 +923,7 @@ async def create_customer(
         payload["id_odp"] = ObjectId(payload["id_odp"])
         payload["registered_by"] = current_user.name
         payload["registered_at"] = GetCurrentDateTime()
+        payload["unique_code"] = await GenerateUniqueCode(db)
         insert_customer_result = await CreateOneData(db.customers, payload)
         if not insert_customer_result:
             await DeleteOneData(db.users, {"email": user_data["email"]})
@@ -1015,6 +1018,8 @@ async def update_customer(
         payload["id_odp"] = ObjectId(payload["id_odp"])
         payload["updated_by"] = current_user.name
         payload["updated_at"] = GetCurrentDateTime()
+        if "unique_code" not in exist_data:
+            payload["unique_code"] = await GenerateUniqueCode(db)
 
         update_result = await UpdateOneData(
             db.customers, {"_id": ObjectId(id)}, {"$set": payload}

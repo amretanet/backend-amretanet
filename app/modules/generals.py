@@ -95,12 +95,11 @@ def GenerateReferralCode(unique_data):
 
 async def GenerateUniqueCode(db):
     used_unique_code = await GetDistinctData(db.customers, {}, "unique_code")
-    max_code = max(used_unique_code)
-    if not max_code:
-        max_code = 0
+    last_unique_code = 0
+    if len(used_unique_code) > 0:
+        last_unique_code = max(used_unique_code)
 
-    new_unique_code = max_code + 1
-
+    new_unique_code = last_unique_code + 1
     while new_unique_code % 10 == 0:
         new_unique_code += 1
 
