@@ -386,8 +386,8 @@ async def SendWhatsappPaymentSuccessMessage(db, invoice_ids: list):
                 "[hari]": GetCurrentDateTime().strftime("%d"),
                 "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
                 "[tahun]": GetCurrentDateTime().strftime("%Y"),
-                "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
-                "[thanks_wa]": whatsapp_config.get("advance", "").get(
+                "[metode_bayar]": invoice_data.get("payment", {}).get("method", "-"),
+                "[thanks_wa]": whatsapp_config.get("advance", {}).get(
                     "thanks_message", ""
                 ),
             }
@@ -450,13 +450,13 @@ async def SendWhatsappTicketOpenMessage(
     )
     v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
     if "assignee" in ticket_data:
-        v_message += f"*Teknisi*: {ticket_data.get('assignee', '').get('name')}\n\n"
+        v_message += f"*Teknisi*: {ticket_data.get('assignee', {}).get('name')}\n\n"
     if "customer" in ticket_data:
         v_message += (
-            f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
+            f"*Nama Pelanggan*: {ticket_data.get('customer', {}).get('name')}\n"
         )
-        v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
-        v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
+        v_message += f"*Nomor Layanan*: {ticket_data.get('customer', {}).get('service_number')}\n"
+        v_message += f"*Alamat*: {ticket_data.get('customer', {}).get('location', {}).get('address', '-')}\n"
     v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
 
     for number in PHONE_NUMBERS:
@@ -503,13 +503,13 @@ async def SendWhatsappTicketClosedMessage(db, id_ticket: str):
     v_message = f"*Tiket CLOSED - {ticket_data.get('title', '')}*\n\n"
     v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
     if "assignee" in ticket_data:
-        v_message += f"*Teknisi*: {ticket_data.get('assignee', '').get('name')}\n\n"
+        v_message += f"*Teknisi*: {ticket_data.get('assignee', {}).get('name')}\n\n"
     if "customer" in ticket_data:
         v_message += (
-            f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
+            f"*Nama Pelanggan*: {ticket_data.get('customer', {}).get('name')}\n"
         )
-        v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
-        v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
+        v_message += f"*Nomor Layanan*: {ticket_data.get('customer', {}).get('service_number')}\n"
+        v_message += f"*Alamat*: {ticket_data.get('customer', {}).get('location', {}).get('address', '-')}\n"
     v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
     if ticket_data.get("confirm_message"):
         v_message += f"*Pesan Konfirmasi*: {ticket_data.get('confirm_message', '')}"

@@ -1,300 +1,50 @@
 import asyncio
-import time
+from datetime import timedelta
 from bson import ObjectId
 from app.models.customers import CustomerStatusData
-from fastapi.responses import JSONResponse
-from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
+from app.modules.database import ConnectToMongoDB, DisconnectMongoDB, GetAmretaDatabase
+from app.modules.crud_operations import GetManyData, GetOneData, UpdateOneData
+from app.modules.generals import DateIDFormatter, GetCurrentDateTime
 from app.models.payments import PaymentMethodData
-from app.modules.mikrotik import MikrotikConnection
-from app.modules.whatsapp_message import MONTH_DICTIONARY
+from app.modules.mikrotik import ActivateMikrotikPPPSecret
+from app.modules.whatsapp_message import SendWhatsappPaymentSuccessMessage
+from app.routes.v1.invoice_routes import CheckMitraFee
 import requests
-from librouteros.query import Key
+from app.modules.telegram_message import SendTelegramPaymentMessage
 from dotenv import load_dotenv
 import os
-from datetime import timedelta
-from urllib.parse import urlencode
-from pymongo import MongoClient
 
 load_dotenv()
 
 AUTOCONFIRM_USER_ID = os.getenv("AUTOCONFIRM_USER_ID")
 AUTOCONFIRM_USER_EMAIL = os.getenv("AUTOCONFIRM_USER_EMAIL")
 
-AMRETA_DB_URI = os.getenv("AMRETA_DB_URI")
-AMRETA_DB_NAME = os.getenv("AMRETA_DB_NAME")
-
 MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
-
-WHATSAPP_ADMIN_NUMBER = os.getenv("WHATSAPP_ADMIN_NUMBER")
-WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
-
-BABLAST_API_URL = os.getenv("BABLAST_API_URL")
-BABLAST_API_TOKEN = os.getenv("BABLAST_API_TOKEN")
-
-MPWA_API_TOKEN = os.getenv("MPWA_API_TOKEN")
-MPWA_API_URL = os.getenv("MPWA_API_URL")
-
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-TELEGRAM_INSTALLATION_THREAD_ID = os.getenv("TELEGRAM_INSTALLATION_THREAD_ID")
-TELEGRAM_MAINTENANCE_THREAD_ID = os.getenv("TELEGRAM_MAINTENANCE_THREAD_ID")
-TELEGRAM_PAYMENT_THREAD_ID = os.getenv("TELEGRAM_PAYMENT_THREAD_ID")
-TELEGRAM_MANAGEMENT_CHAT_ID = os.getenv("TELEGRAM_MANAGEMENT_CHAT_ID")
-TELEGRAM_MANAGEMENT_PAYMENT_THREAD_ID = os.getenv(
-    "TELEGRAM_MANAGEMENT_PAYMENT_THREAD_ID"
-)
-
-
-def get_database():
-    client = MongoClient(AMRETA_DB_URI)
-    return client[AMRETA_DB_NAME]
-
-
-def get_mikrotik_router_by_id(id_router: str):
-    db = get_database()
-    host = None
-    username = None
-    password = None
-    port = None
-    router_data = db.router.find_one({"_id": ObjectId(id_router)})
-    if router_data:
-        host = router_data.get("ip_address", None)
-        username = router_data.get("username", None)
-        password = router_data.get("password", None)
-        port = router_data.get("api_port", None)
-
-    return host, username, password, port
-
-
-def send_whatsapp_payment_success(id_invoice):
-    db = get_database()
-    try:
-        invoice_data = db.invoices.find_one({"_id": id_invoice})
-        whatsapp_bot = db.configurations.find_one({"type": "WHATSAPP_BOT"})
-        whatsapp_config = db.configurations.find_one(
-            {"type": "WHATSAPP_MESSAGE_TEMPLATE"}
-        )
-        customer_data = db.customers.find_one({"_id": invoice_data["id_customer"]})
-        if (
-            not invoice_data
-            or not whatsapp_bot
-            or not whatsapp_config
-            or not customer_data
-        ):
-            return
-
-        message = whatsapp_config.get("paid", "")
-        fields_to_replace = {
-            "[nama_pelanggan]": customer_data.get("name", "-"),
-            "[no_servis]": customer_data.get("service_number", "-"),
-            "[nama_paket]": invoice_data.get("package", [])[0]["name"],
-            "[jumlah_tagihan]": ThousandSeparator(invoice_data.get("amount", 0)),
-            "[status]": "SUDAH DIBAYAR",
-            "[hari]": GetCurrentDateTime().strftime("%d"),
-            "[bulan]": MONTH_DICTIONARY[int(invoice_data.get("month"))],
-            "[tahun]": GetCurrentDateTime().strftime("%Y"),
-            "[metode_bayar]": invoice_data.get("payment", "-").get("method", "-"),
-            "[thanks_wa]": whatsapp_config.get("advance", "").get("thanks_message", ""),
-        }
-
-        for key, value in fields_to_replace.items():
-            try:
-                message = message.replace(key, str(value))
-            except Exception:
-                message = message.replace(key, "-")
-
-        whatsapp_gateway = whatsapp_config.get("advance", {}).get("whatsapp_gateway")
-        if whatsapp_gateway == "MPWA":
-            body = {
-                "api_key": MPWA_API_TOKEN,
-                "sender": WHATSAPP_BOT_NUMBER,
-                "number": f"62{customer_data['phone_number']}",
-                "message": message,
-            }
-            url = f"{MPWA_API_URL}/send-message"
-            requests.post(url, json=body, timeout=15)
-        else:
-            url = f"{BABLAST_API_URL}/send"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {BABLAST_API_TOKEN}",
-            }
-            body = {
-                "phone": f"62{customer_data['phone_number']}",
-                "message": message,
-            }
-            requests.post(url=url, headers=headers, json=body, timeout=15)
-
-        time.sleep(30)
-    except Exception as e:
-        print(str(e))
-
-
-def send_telegram_payment_success(id_invoice):
-    db = get_database()
-    try:
-        invoice_data = db.invoices.find_one({"_id": id_invoice})
-        if not invoice_data:
-            return
-
-        v_message = "*Pembayaran Pelanggan*\n\n"
-        v_message += f"*Nama*: {invoice_data.get('name', 'Pelanggan')}\n"
-        v_message += f"*Nomor Layanan*: {invoice_data.get('service_number', '-')}\n"
-        v_message += (
-            f"*Tagihan*: Rp{ThousandSeparator(invoice_data.get('amount', 0))}\n"
-        )
-        v_message += (
-            f"*Periode*: {DateIDFormatter(str(invoice_data.get('due_date')))}\n"
-        )
-        v_message += f"*Tanggal Pembayaran*: {DateIDFormatter(str(invoice_data.get('payment').get('paid_at')))}\n"
-        v_message += (
-            f"*Metode Pembayaran*: {invoice_data.get('payment').get('method')}\n"
-        )
-        if invoice_data.get("payment").get("method") in ["TRANSFER", "QRIS"]:
-            v_message += (
-                f"*Bukti Pembayaran*: {invoice_data.get('payment').get('image_url')}\n"
-            )
-
-        params = {
-            "chat_id": TELEGRAM_MANAGEMENT_CHAT_ID,
-            "message_thread_id": TELEGRAM_MANAGEMENT_PAYMENT_THREAD_ID,
-            "text": v_message,
-            "parse_mode": "Markdown",
-        }
-        telegram_api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage?{urlencode(params)}"
-        requests.get(telegram_api_url)
-
-    except Exception as e:
-        print(str(e))
-
-
-def activate_mikrotik_ppp_secret(customer_data, disabled: bool = False):
-    db = get_database()
-    try:
-        pppoe_username = customer_data.get("pppoe_username", None)
-        pppoe_password = customer_data.get("pppoe_password", None)
-        id_router = customer_data.get("id_router", None)
-
-        # check router
-        host, username, password, port = get_mikrotik_router_by_id(str(id_router))
-        if not host:
-            return False
-
-        secret_data = []
-        secret_id = None
-        mikrotik = MikrotikConnection(host, username, password, port)
-        name = Key("name")
-        for row in mikrotik.path("/ppp/secret").select().where(name == pppoe_username):
-            secret_data.append(row)
-
-        # get specified secret
-        secret_id = None
-        if len(secret_data) > 0:
-            secret_id = secret_data[0].get(".id", None)
-
-        if secret_id:
-            # update exist secret
-            update_data = {
-                ".id": secret_id,
-                "disabled": disabled,
-            }
-            if pppoe_username:
-                update_data["name"] = pppoe_username
-            if pppoe_password:
-                update_data["password"] = pppoe_password
-
-            mikrotik.path("/ppp/secret").update(**update_data)
-        else:
-            # create new secret data
-            package_data = db.packages.find_one(
-                {"_id": customer_data.get("id_package", None)}
-            )
-            if not package_data:
-                return False
-
-            insert_data = {
-                "name": str(pppoe_username),
-                "password": str(pppoe_password),
-                "service": "ppp",
-                "profile": package_data.get("router_profile", "default"),
-                "disabled": disabled,
-                "comment": customer_data.get("name", "Undefined"),
-            }
-            mikrotik.path("/ppp/secret").add(**insert_data)
-
-        if disabled:
-            active_data = []
-            for row in (
-                mikrotik.path("/ppp/active").select().where(name == pppoe_username)
-            ):
-                active_data.append(row)
-
-            if len(active_data) > 0:
-                active_id = active_data[0].get(".id")
-                mikrotik.path("/ppp/active").remove(active_id)
-    except Exception:
-        return False
-
-    return True
-
-
-def check_mitra_fee(customer_data, id_invoice):
-    db = get_database()
-    try:
-        invoice_data = list(
-            db.invoices.find({"id_customer": ObjectId(customer_data.get("_id"))})
-        )
-        if len(invoice_data) <= 1:
-            return
-
-        if customer_data.get("referral", None):
-            referral_user = db.users.find_one(
-                {"referral": customer_data.get("referral")}
-            )
-            if referral_user and referral_user.get("role") == 6:
-                package_data = db.packages.find_one(
-                    {"_id": ObjectId(customer_data.get("id_package"))}
-                )
-                if package_data:
-                    package_fee = package_data.get("price", {}).get("mitra_fee", 0)
-                    mitra_fee = referral_user.get("saldo", 0) + package_fee
-                    db.users.update_one(
-                        {"referral": customer_data.get("referral")},
-                        {"$set": {"saldo": mitra_fee}},
-                    )
-                    db.invoices_fees.insert_one(
-                        {
-                            "id_customer": ObjectId(customer_data.get("_id")),
-                            "id_invoice": ObjectId(id_invoice),
-                            "id_user": ObjectId(referral_user.get("_id")),
-                            "referral": referral_user.get("referral"),
-                            "fee": package_fee,
-                            "created_at": GetCurrentDateTime(),
-                        },
-                    )
-    except Exception as e:
-        print(str(e))
 
 
 async def main():
     start_time = GetCurrentDateTime()
-    db = get_database()
+    await ConnectToMongoDB()
+    db = await GetAmretaDatabase()
+
     confirmed = 0
     duplicated = 0
 
-    invoice_data = list(
-        db.invoices.find(
-            {
+    pipeline = [
+        {
+            "$match": {
                 "status": {"$in": ["UNPAID", "PENDING"]},
                 "due_date": {
                     "$gte": GetCurrentDateTime() - timedelta(days=5),
                     "$lte": GetCurrentDateTime() + timedelta(days=5),
                 },
             }
-        )
-    )
-    for invoice in invoice_data:
+        }
+    ]
+    success_invoice_ids = []
+    invoices, _ = await GetManyData(db.invoices, pipeline)
+    for invoice in invoices:
         print("=" * 100)
         amount = invoice.get("amount", 0)
         headers = {
@@ -323,7 +73,9 @@ async def main():
                     "payment.confirmed_at": GetCurrentDateTime(),
                     "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
                 }
-                db.invoices.update_one({"_id": invoice["_id"]}, {"$set": confirm_data})
+                await UpdateOneData(
+                    db.invoices, {"_id": invoice["_id"]}, {"$set": confirm_data}
+                )
                 confirmed += 1
                 income_data = {
                     "id_invoice": invoice["_id"],
@@ -335,37 +87,42 @@ async def main():
                     "id_receiver": ObjectId(AUTOCONFIRM_USER_ID),
                     "created_at": GetCurrentDateTime(),
                 }
-                db.incomes.update_one(
+                await UpdateOneData(
+                    db.incomes,
                     {"id_invoice": invoice["_id"]},
                     {"$set": income_data},
                     upsert=True,
                 )
-
-                # update customer status
-                db.customers.update_one(
+                await UpdateOneData(
+                    db.customers,
                     {"_id": invoice["id_customer"]},
                     {"$set": {"status": CustomerStatusData.ACTIVE.value}},
                 )
-
-                customer_data = db.customers.find_one({"_id": invoice["id_customer"]})
+                customer_data = await GetOneData(
+                    db.customers, {"_id": invoice["id_customer"]}
+                )
                 if customer_data:
-                    activate_mikrotik_ppp_secret(customer_data, False)
-                    check_mitra_fee(customer_data, invoice["_id"])
+                    await ActivateMikrotikPPPSecret(db, customer_data, False)
+                    await CheckMitraFee(db, customer_data, invoice["_id"])
 
-                send_whatsapp_payment_success(invoice["_id"])
-                send_telegram_payment_success(invoice["_id"])
+                success_invoice_ids.append(invoice["_id"])
+                await SendTelegramPaymentMessage(db, id)
             elif len(result) > 1:
                 print(f"Mutation is Duplicated : {result}")
                 duplicated += 1
-            print("=" * 100)
-        except requests.exceptions.RequestException as e:
-            print(f"Error {str(e)}")
 
+            print("=" * 100)
+        except Exception as e:
+            print(str(e))
+
+    if len(success_invoice_ids) > 0:
+        await SendWhatsappPaymentSuccessMessage(db, success_invoice_ids)
+
+    await DisconnectMongoDB()
     end_time = GetCurrentDateTime()
     execution_time = end_time - start_time
     print(f"Confirmed: {confirmed}, Duplicate Amount: {duplicated}")
     print(f"Execution Time : {execution_time}")
-    return JSONResponse(content={"message": "Auto Confirmed Telah Dijalankan!"})
 
 
 if __name__ == "__main__":
