@@ -308,7 +308,7 @@ async def request_confirm_payment(
             [
                 {
                     "$match": {
-                        "role": UserRole.ADMIN,
+                        "role": UserRole.OWNER,
                     }
                 }
             ],

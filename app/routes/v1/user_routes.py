@@ -269,16 +269,17 @@ async def change_password(
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
+
 @router.get("/list-collectors")
 async def list_collectors(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    collector_roles = [ UserRole.ENGINEER, UserRole.BILL_COLLECTOR]
+    collector_roles = [UserRole.ENGINEER.value, UserRole.BILL_COLLECTOR.value]
     role_values = [role.value for role in collector_roles]
 
     cursor = db.users.find(
-        { "role": { "$in": role_values } },
-        { "name": 1, "email": 1, "role": 1, "status": 1, "_id": 0 } 
+        {"role": {"$in": role_values}},
+        {"name": 1, "email": 1, "role": 1, "status": 1, "_id": 0},
     )
     users = await cursor.to_list(length=100)
 

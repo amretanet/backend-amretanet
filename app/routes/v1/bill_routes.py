@@ -91,7 +91,7 @@ async def get_bills(
         query["year"] = year
 
     # 🔐 Filter berdasarkan role user
-    if current_user.role != 1:
+    if current_user.role != UserRole.OWNER.value:
         query["collector.assigned_to"] = current_user.email
 
     pipeline = [
@@ -139,7 +139,7 @@ async def get_assigned_bills(
     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
 ):
     # Only admin (role 1) can use this endpoint
-    if current_user.role != 1:
+    if current_user.role != UserRole.OWNER.value:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     query = {"collector.assigned_to": assigned_to}
@@ -184,7 +184,7 @@ async def get_assigned_users(
     current_user: UserData = Depends(GetCurrentUser),
 ):
     # 🔐 Hanya untuk admin
-    if current_user.role != 1:
+    if current_user.role != UserRole.OWNER.value:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Ambil distinct assigned_to dari invoice
@@ -429,7 +429,7 @@ async def mark_bill_as_collected(
                 }
 
                 admin_users = await GetAggregateData(
-                    db.users, [{"$match": {"role": UserRole.ADMIN}}]
+                    db.users, [{"$match": {"role": UserRole.OWNER}}]
                 )
 
                 for user in admin_users:

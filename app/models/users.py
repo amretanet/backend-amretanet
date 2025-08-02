@@ -25,6 +25,7 @@ class UserStatusData(int, Enum):
 
 
 class UserRole(int, Enum):
+    OWNER = 0
     ADMIN = 1
     SALES = 2
     CUSTOMER_SERVICE = 3

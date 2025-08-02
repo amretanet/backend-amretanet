@@ -468,7 +468,7 @@ async def close_ticket(
         await CreateOneData(db.notifications, notification_data.copy())
 
     admin_user = await GetAggregateData(
-        db.users, [{"$match": {"role": UserRole.ADMIN}}]
+        db.users, [{"$match": {"role": UserRole.OWNER}}]
     )
     if len(admin_user) > 0:
         for user in admin_user:

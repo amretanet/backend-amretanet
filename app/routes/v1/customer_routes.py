@@ -755,7 +755,7 @@ async def register_customer(
             "gender": payload["gender"],
             "saldo": 0,
             "referral": GenerateReferralCode(payload["email"]),
-            "role": 99,
+            "role": UserRole.CUSTOMER.value,
             "address": payload["location"]["address"],
         }
         insert_user_result = await CreateOneData(db.users, user_data)
@@ -810,7 +810,7 @@ async def register_customer(
             "created_at": GetCurrentDateTime(),
         }
         admin_user = await GetAggregateData(
-            db.users, [{"$match": {"role": UserRole.ADMIN}}]
+            db.users, [{"$match": {"role": UserRole.OWNER}}]
         )
         if len(admin_user) > 0:
             for user in admin_user:
@@ -875,7 +875,7 @@ async def create_customer(
             "gender": payload["gender"],
             "referral": GenerateReferralCode(payload["email"]),
             "saldo": 0,
-            "role": 99,
+            "role": UserRole.CUSTOMER.value,
             "address": payload["location"]["address"],
         }
         if payload["status"] == CustomerStatusData.ACTIVE:

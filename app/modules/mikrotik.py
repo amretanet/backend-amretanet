@@ -51,7 +51,7 @@ async def CreateMikrotikErrorNotification(db, description: str):
         "created_at": GetCurrentDateTime(),
     }
     admin_user = await GetAggregateData(
-        db.users, [{"$match": {"role": UserRole.ADMIN.value}}]
+        db.users, [{"$match": {"role": UserRole.OWNER.value}}]
     )
     for user in admin_user:
         notification_data["id_user"] = ObjectId(user["_id"])
