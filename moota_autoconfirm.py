@@ -107,6 +107,18 @@ async def main():
 
                 success_invoice_ids.append(invoice["_id"])
                 await SendTelegramPaymentMessage(db, id)
+                try:
+                    mutation_id = result[0].get("mutation_id")
+                    notes_url = (
+                        f"https://api.moota.co/api/v2/mutation/{mutation_id}/note"
+                    )
+                    body = {
+                        "note": f"{invoice.get('name')} - {invoice.get('service_number')}",
+                    }
+                    requests.post(notes_url, headers=headers, json=body)
+                except Exception as e:
+                    print(str(e))
+                    continue
             elif len(result) > 1:
                 print(f"Mutation is Duplicated : {result}")
                 duplicated += 1
