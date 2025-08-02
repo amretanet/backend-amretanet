@@ -30,7 +30,7 @@ async def VerifyPassword(plain_password, hashed_password):
     try:
         return pwd_context.verify(plain_password, hashed_password)
     except Exception as e:
-        print(e)
+        print(str(e))
         return False
 
 

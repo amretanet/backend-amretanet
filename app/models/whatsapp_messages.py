@@ -22,6 +22,11 @@ class SendBroadcastMessageData(BaseModel):
     message: str
 
 
+class WhatsappGatewayType(str, Enum):
+    BABLAST = "BABLAST"
+    MPWA = "MPWA"
+
+
 class AdvanceMessageTemplateData(BaseModel):
     header: Optional[str] = None
     body: Optional[str] = None
@@ -32,3 +37,4 @@ class AdvanceMessageTemplateData(BaseModel):
     unique_code_status: Optional[int] = 0
     unique_code_message: Optional[str] = None
     saldo_fee: Optional[int] = 0
+    whatsapp_gateway: Optional[WhatsappGatewayType] = WhatsappGatewayType.BABLAST.value

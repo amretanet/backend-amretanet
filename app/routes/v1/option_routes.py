@@ -273,7 +273,7 @@ async def get_router_profile_options(
         for row in mikrotik.path("/ppp/profile").select():
             router_profile_options.append(row.get("name", ""))
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(content={"router_profile_options": router_profile_options})
 

@@ -1,27 +1,24 @@
+import asyncio
 import base64
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Body
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
-from datetime import datetime
-from typing import Optional
+from typing import Any, Dict
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.generals import DateIDFormatter, GetCurrentDateTime, ThousandSeparator
 from app.models.customers import CustomerStatusData
 from app.models.notifications import NotificationTypeData
-from typing import Optional, List
+from typing import List
 from dateutil.relativedelta import relativedelta
 from app.models.payments import PaymentMethodData
 from app.models.users import UserData, UserRole
-
+from app.routes.v1.payment_routes import CheckMitraFee
 from app.modules.crud_operations import (
     CreateOneData,
-    DeleteManyData,
-    DeleteOneData,
     GetAggregateData,
     GetManyData,
     GetOneData,
-    UpdateManyData,
     UpdateOneData,
 )
 from app.modules.whatsapp_message import (
@@ -31,30 +28,20 @@ from app.models.bill import (
     BillPayOffData,
     BillStatusData,
     MarkCollectedBody,
-    MarkApprovedBody
+    MarkApprovedBody,
 )
 
 from app.modules.response_message import (
-    DATA_HAS_DELETED_MESSAGE,
-    DATA_HAS_UPDATED_MESSAGE,
-    EXIST_DATA_MESSAGE,
     FORBIDDEN_ACCESS_MESSAGE,
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
-
-
-from app.models.users import UserData
-from app.routes.v1.auth_routes import GetCurrentUser 
-from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase  
-def convert_objectid(doc):
-    doc["_id"] = str(doc["_id"])
-    if "customer_id" in doc:
-        doc["customer_id"] = str(doc["customer_id"])
-    return doc
+from app.routes.v1.auth_routes import GetCurrentUser
+from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 
 
 router = APIRouter(prefix="/bills", tags=["Bill Collector"])
+
 
 @router.get("")
 async def get_bills(
@@ -68,7 +55,7 @@ async def get_bills(
     sort_key: str = "due_date",
     sort_direction: str = "asc",
     current_user: UserData = Depends(GetCurrentUser),
-    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase)
+    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
 ):
     query: Dict[str, Any] = {}
 
@@ -140,6 +127,7 @@ async def get_bills(
         }
     )
 
+
 @router.get("/assigned")
 async def get_assigned_bills(
     assigned_to: str,
@@ -154,9 +142,7 @@ async def get_assigned_bills(
     if current_user.role != 1:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    query = {
-        "collector.assigned_to": assigned_to
-    }
+    query = {"collector.assigned_to": assigned_to}
 
     pipeline = [
         {"$match": query},
@@ -203,50 +189,38 @@ async def get_assigned_users(
 
     # Ambil distinct assigned_to dari invoice
     pipeline = [
-        {
-            "$match": {
-                "collector.assigned_to": {"$ne": None}
-            }
-        },
-        {
-            "$group": {
-                "_id": "$collector.assigned_to"
-            }
-        },
+        {"$match": {"collector.assigned_to": {"$ne": None}}},
+        {"$group": {"_id": "$collector.assigned_to"}},
         {
             "$lookup": {
                 "from": "users",
                 "localField": "_id",
                 "foreignField": "email",
-                "as": "user"
+                "as": "user",
             }
         },
-        {
-            "$unwind": "$user"
-        },
+        {"$unwind": "$user"},
         {
             "$project": {
                 "email": "$_id",
                 "name": "$user.name",
                 "role": "$user.role",
-                "_id": 0
+                "_id": 0,
             }
-        }
+        },
     ]
 
     assigned_users = await db.invoices.aggregate(pipeline).to_list(length=None)
 
     return JSONResponse(content={"assigned_users": assigned_users})
 
+
 @router.get("/detail/{id}")
 async def get_bill_detail(
     id: str,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    try:
-        object_id = ObjectId(id)
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid bill ID format")
+    object_id = ObjectId(id)
 
     bill_data = await GetOneData(
         db.invoices,
@@ -260,21 +234,19 @@ async def get_bill_detail(
             "month": 1,
             "year": 1,
             "package": 1,
-            "unique_code" : 1,
+            "unique_code": 1,
             "add_on_packages": 1,
             "payment": 1,
             "customer": 1,
             "created_at": 1,
-            "collector": 1, 
-        }
-
+            "collector": 1,
+        },
     )
 
     if not bill_data:
         raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
 
     return JSONResponse(content={"bill_data": bill_data})
-
 
 
 @router.put("/pay-off/{id}")
@@ -377,13 +349,17 @@ async def mark_bill_as_collected(
 ):
     try:
         decoded = base64.b64decode(data.id).decode("utf-8")
-        id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
-        if not id_list:
+        invoice_ids: List[ObjectId] = [
+            ObjectId(i.strip()) for i in decoded.split(",") if i.strip()
+        ]
+        if not invoice_ids:
             raise ValueError
     except Exception:
         raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
 
-    invoices = await db.invoices.find({"_id": {"$in": id_list}}).to_list(length=len(id_list))
+    invoices = await db.invoices.find({"_id": {"$in": invoice_ids}}).to_list(
+        length=len(invoice_ids)
+    )
 
     if not invoices:
         raise HTTPException(status_code=404, detail={"message": "Invoices not found."})
@@ -415,7 +391,7 @@ async def mark_bill_as_collected(
                     "paid_at": now,
                     "confirmed_by": current_user.email,
                     "confirmed_at": now,
-                }
+                },
             }
         }
 
@@ -425,14 +401,17 @@ async def mark_bill_as_collected(
 
             invoice_id = invoice["_id"]
 
-            await SendWhatsappPaymentSuccessBillMessage(db, invoice_id)
-
             updated_invoice = await GetOneData(db.invoices, {"_id": invoice_id})
             if updated_invoice:
-                customer = await GetOneData(db.customers, {"_id": ObjectId(updated_invoice["id_customer"])})
+                customer = await GetOneData(
+                    db.customers, {"_id": ObjectId(updated_invoice["id_customer"])}
+                )
                 if customer:
                     status = customer.get("status")
-                    if status != CustomerStatusData.ACTIVE and status == CustomerStatusData.FREE:
+                    if (
+                        status != CustomerStatusData.ACTIVE
+                        and status == CustomerStatusData.FREE
+                    ):
                         await UpdateOneData(
                             db.customers,
                             {"_id": customer["_id"]},
@@ -450,8 +429,7 @@ async def mark_bill_as_collected(
                 }
 
                 admin_users = await GetAggregateData(
-                    db.users,
-                    [{"$match": {"role": UserRole.ADMIN}}]
+                    db.users, [{"$match": {"role": UserRole.ADMIN}}]
                 )
 
                 for user in admin_users:
@@ -459,12 +437,19 @@ async def mark_bill_as_collected(
                     await CreateOneData(db.notifications, notification_data.copy())
 
     if modified_count == 0:
-        raise HTTPException(status_code=400, detail={"message": "Tidak ada tagihan yang berhasil diperbarui."})
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Tidak ada tagihan yang berhasil diperbarui."},
+        )
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentSuccessBillMessage(db, invoice_ids))
 
-    return JSONResponse(content={
-        "message": "Tagihan berhasil ditandai sebagai COLLECTED",
-        "modified_count": modified_count
-    })
+    return JSONResponse(
+        content={
+            "message": "Tagihan berhasil ditandai sebagai COLLECTED",
+            "modified_count": modified_count,
+        }
+    )
 
 
 @router.put("/mark-approved")
@@ -475,13 +460,17 @@ async def mark_bill_as_approved(
 ):
     try:
         decoded = base64.b64decode(data.id).decode("utf-8")
-        id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
+        id_list: List[ObjectId] = [
+            ObjectId(i.strip()) for i in decoded.split(",") if i.strip()
+        ]
         if not id_list:
             raise ValueError
     except Exception:
         raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
 
-    invoices = await db.invoices.find({"_id": {"$in": id_list}}).to_list(length=len(id_list))
+    invoices = await db.invoices.find({"_id": {"$in": id_list}}).to_list(
+        length=len(id_list)
+    )
 
     if not invoices:
         raise HTTPException(status_code=404, detail={"message": "Invoices not found."})
@@ -520,21 +509,24 @@ async def mark_bill_as_approved(
     if modified_count == 0:
         raise HTTPException(status_code=500, detail={"message": "No invoices updated."})
 
-    return JSONResponse(content={
-        "message": "Tagihan berhasil disetujui dan ditandai sebagai PAID",
-        "modified_count": modified_count
-    })
+    return JSONResponse(
+        content={
+            "message": "Tagihan berhasil disetujui dan ditandai sebagai PAID",
+            "modified_count": modified_count,
+        }
+    )
+
 
 @router.post("/bill-collector/auto-repeat")
 async def auto_repeat_collector_status(
-    db: AsyncIOMotorClient = Depends(GetAmretaDatabase)
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     today = GetCurrentDateTime()
 
     query = {
         "collector.repeat_monthly": True,
         "collector.status": "COLLECTED",
-        "due_date": {"$lt": today}
+        "due_date": {"$lt": today},
     }
 
     invoices = db.invoices.find(query)
@@ -552,12 +544,9 @@ async def auto_repeat_collector_status(
                 "status": "COLLECTING",
                 "due_date": new_due_date,
                 "collector.status": "COLLECTING",
-                "collector.updated_at": GetCurrentDateTime()
+                "collector.updated_at": GetCurrentDateTime(),
             },
-            "$unset": {
-                "collector.collected_at": "",
-                "collector.description": ""
-            }
+            "$unset": {"collector.collected_at": "", "collector.description": ""},
         }
 
         await db.invoices.update_one({"_id": invoice["_id"]}, update_data)
@@ -565,8 +554,9 @@ async def auto_repeat_collector_status(
 
     return {
         "message": "Repeat monthly collector status updated.",
-        "updated_count": updated_count
+        "updated_count": updated_count,
     }
+
 
 @router.delete("/delete")
 async def delete_invoice_collector_data(
@@ -581,18 +571,20 @@ async def delete_invoice_collector_data(
 
     try:
         decoded_id = base64.b64decode(id).decode("utf-8")
-        id_list = [ObjectId(item.strip()) for item in decoded_id.split(",") if item.strip()]
+        id_list = [
+            ObjectId(item.strip()) for item in decoded_id.split(",") if item.strip()
+        ]
     except Exception:
         raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
 
     result = await db.invoices.update_many(
-        {"_id": {"$in": id_list}},
-        {"$unset": {"collector": ""}}
+        {"_id": {"$in": id_list}}, {"$unset": {"collector": ""}}
     )
 
     if result.modified_count == 0:
         raise HTTPException(
-            status_code=404, detail={"message": "Tidak ada data collector yang dihapus."}
+            status_code=404,
+            detail={"message": "Tidak ada data collector yang dihapus."},
         )
 
     return JSONResponse(

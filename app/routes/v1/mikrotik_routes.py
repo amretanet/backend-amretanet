@@ -57,7 +57,7 @@ async def get_interface_data(
         ):
             interface_data.append(row)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(content={"interface_data": interface_data})
 
@@ -82,7 +82,7 @@ async def get_profile_data(
         for row in mikrotik.path("/ppp/profile").select():
             profile_data.append(row)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(content={"profile_data": profile_data})
 
@@ -132,7 +132,7 @@ async def get_secret_data(
             row["password"] = str(row.get("password", ""))
             secret_data.append(row)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(content={"secret_data": secret_data})
 
@@ -216,7 +216,7 @@ async def get_system_resource_data(
         for row in mikrotik.path("/system/resource").select():
             system_resource_data.append(row)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(
         content={
@@ -251,7 +251,7 @@ async def get_user_stats_data(
         for row in mikrotik.path("/ppp/secret").select():
             secret.append(row)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(
         content={
@@ -282,7 +282,7 @@ async def get_log_data(
         for row in mikrotik.path("/log").select():
             log_data.append(row)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(content={"log_data": log_data})
 
@@ -306,6 +306,6 @@ async def reboot_mikrotik(
         mikrotik = MikrotikConnection(host, username, password, port)
         mikrotik("/system/reboot")
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(str(e))
 
     return JSONResponse(content={"message": "Mikrotik Telah Direboot"})

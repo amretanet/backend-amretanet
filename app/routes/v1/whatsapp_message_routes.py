@@ -1,3 +1,4 @@
+import asyncio
 from bson import ObjectId
 from fastapi import (
     APIRouter,
@@ -10,7 +11,11 @@ from app.models.whatsapp_messages import (
     SendBroadcastMessageData,
     SendSingleMessageData,
 )
-from app.modules.whatsapp_message import SendWhatsappMessage, WhatsappMessageFormatter
+from app.modules.whatsapp_message import (
+    SendWhatsappBroadcastMessage,
+    SendWhatsappSingleMessage,
+    WhatsappMessageFormatter,
+)
 from app.models.customers import CustomerStatusData
 from app.modules.response_message import (
     DATA_FORMAT_NOT_VALID_MESSAGE,
@@ -25,6 +30,7 @@ from app.models.generals import Pagination
 from app.modules.generals import ReminderDateFormatter
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import (
+    GetDistinctData,
     GetManyData,
     GetOneData,
     UpdateOneData,
@@ -36,7 +42,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
-WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
+MPWA_API_TOKEN = os.getenv("MPWA_API_TOKEN")
 
 router = APIRouter(prefix="/whatsapp-message", tags=["Whatsapp Messages"])
 
@@ -177,6 +183,7 @@ async def get_reminder(
 async def send_single_message(
     data: SendSingleMessageData = Body(..., embed=True),
     current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     if current_user.role == UserRole.CUSTOMER:
         raise HTTPException(
@@ -184,18 +191,19 @@ async def send_single_message(
         )
     try:
         payload = data.dict(exclude_unset=True)
-        response = await SendWhatsappMessage(
+        response = await SendWhatsappSingleMessage(
+            db,
             payload["destination"],
             WhatsappMessageFormatter(payload["title"], payload["message"]),
         )
-        if response.status_code == 200:
+        if response.get("success"):
             return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
 
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
@@ -211,54 +219,43 @@ async def send_broadcast_message(
         )
     try:
         payload = data.dict(exclude_unset=True)
-        contact_data = []
+        collection_name = "customers"
+        query = {}
+        pipeline = []
         if payload["group"] == "user":
             query = {}
             if payload["destination"] != "all":
                 query["role"] = int(payload["destination"])
 
-            user_data, _ = await GetManyData(
-                db.users, [{"$match": query}], {"phone_number": 1}
-            )
-            contact_data = user_data
+            collection_name = "users"
         elif payload["group"] == "package":
             query = {"id_package": ObjectId(payload["destination"])}
-            customer_data, _ = await GetManyData(
-                db.customers, [{"$match": query}], {"phone_number": 1}
-            )
-            contact_data = customer_data
         elif payload["group"] == "coverage_area":
             query = {"id_coverage_area": ObjectId(payload["destination"])}
-            customer_data, _ = await GetManyData(
-                db.customers, [{"$match": query}], {"phone_number": 1}
-            )
-            contact_data = customer_data
         elif payload["group"] == "odp":
             query = {"id_odp": ObjectId(payload["destination"])}
-            customer_data, _ = await GetManyData(
-                db.customers, [{"$match": query}], {"phone_number": 1}
-            )
-            contact_data = customer_data
         else:
             raise HTTPException(
                 status_code=400, detail={"message": DATA_FORMAT_NOT_VALID_MESSAGE}
             )
 
+        pipeline.append({"$match": query})
+        contact_data, _ = await GetManyData(
+            db[collection_name], pipeline, {"name": 1, "phone_number": 1}
+        )
         if len(contact_data) == 0:
             raise HTTPException(
                 status_code=404,
                 detail={"message": "Daftar Kontak Tujuan Tidak Ditemukan!"},
             )
 
-        for item in contact_data:
-            await SendWhatsappMessage(
-                item["phone_number"],
-                WhatsappMessageFormatter(payload["title"], payload["message"]),
-            )
-
-        return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
+        message = WhatsappMessageFormatter(payload["title"], payload["message"])
+        asyncio.create_task(SendWhatsappBroadcastMessage(db, contact_data, message))
+        return JSONResponse(
+            content={"message": "Pesan Sedang Dalam Proses Pengiriman!"}
+        )
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})

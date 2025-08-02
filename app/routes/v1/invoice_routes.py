@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import time
 from dateutil.relativedelta import relativedelta
 from typing import Optional, List
-
+import asyncio
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -22,6 +22,7 @@ from app.modules.crud_operations import (
     DeleteManyData,
     DeleteOneData,
     GetAggregateData,
+    GetDistinctData,
     GetManyData,
     GetOneData,
     UpdateManyData,
@@ -182,7 +183,6 @@ async def get_invoice_detail(
 @router.get("/generate")
 async def generate_invoice(
     is_send_whatsapp: bool = False,
-    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     pipeline = []
@@ -312,78 +312,84 @@ async def generate_invoice(
     if len(customer_data) == 0:
         return
 
+    invoice_ids = []
     invoice_exist = 0
     invoice_created = 0
     current_date = GetCurrentDateTime()
     next_month = current_date + relativedelta(months=1)
     for customer in customer_data:
-        customer_due_date = customer.get("due_date")
-        if int(customer_due_date) > max_date_of_month:
-            customer_due_date = str(max_date_of_month).zfill(2)
-        target_month = current_date.strftime("%m")
-        target_year = current_date.strftime("%Y")
-        if customer_due_date in next_month_dates:
-            target_month = next_month.strftime("%m")
-            target_year = next_month.strftime("%Y")
+        try:
+            customer_due_date = customer.get("due_date")
+            if int(customer_due_date) > max_date_of_month:
+                customer_due_date = str(max_date_of_month).zfill(2)
+            target_month = current_date.strftime("%m")
+            target_year = current_date.strftime("%Y")
+            if customer_due_date in next_month_dates:
+                target_month = next_month.strftime("%m")
+                target_year = next_month.strftime("%Y")
 
-        query = {
-            "service_number": customer["service_number"],
-            "month": target_month,
-            "year": target_year,
-        }
-        exist_invoice = await GetOneData(db.invoices, query)
-        if exist_invoice:
-            invoice_exist += 1
+            query = {
+                "service_number": customer["service_number"],
+                "month": target_month,
+                "year": target_year,
+            }
+            exist_invoice = await GetOneData(db.invoices, query)
+            if exist_invoice:
+                invoice_exist += 1
+                continue
+
+            current_unique_code = await GetUniqueCode(db, customer["amount"])
+            ppn = 0
+            paid_leave_discount = 0
+            if customer.get("ppn", 0):
+                ppn = customer["amount"] * (PPN / 100)
+
+            if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
+                paid_leave_discount = customer["amount"] * (
+                    (100 - PAID_LEAVE_PERCENTAGE) / 100
+                )
+                customer["amount"] = customer["amount"] - paid_leave_discount
+
+            final_amount = customer["amount"] + ppn + current_unique_code
+            invoice_data = {
+                "id_customer": ObjectId(customer["_id"]),
+                "name": customer["name"],
+                "service_number": customer["service_number"],
+                "package": customer["package"],
+                "due_date": datetime.strptime(
+                    f"{target_year}-{target_month}-{customer_due_date} 23:59:59",
+                    "%Y-%m-%d %H:%M:%S",
+                ),
+                "add_on_packages": customer["add_on_packages"],
+                "month": target_month,
+                "year": target_year,
+                "status": "UNPAID",
+                "package_amount": customer["package_amount"],
+                "add_on_package_amount": customer["add_on_package_amount"],
+                "ppn": ppn,
+                "unique_code": current_unique_code,
+                "amount": final_amount,
+                "created_at": GetCurrentDateTime(),
+            }
+            if paid_leave_discount:
+                invoice_data["paid_leave_discount"] = paid_leave_discount
+
+            invoice_result = await CreateOneData(db.invoices, invoice_data)
+            if not invoice_result.inserted_id:
+                raise HTTPException(
+                    status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+                )
+
+            if is_send_whatsapp:
+                invoice_ids.append(str(invoice_result.inserted_id))
+
+            invoice_created += 1
+        except Exception as e:
+            print(str(e))
             continue
 
-        current_unique_code = await GetUniqueCode(db, customer["amount"])
-        ppn = 0
-        paid_leave_discount = 0
-        if customer.get("ppn", 0):
-            ppn = customer["amount"] * (PPN / 100)
-
-        if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
-            paid_leave_discount = customer["amount"] * (
-                (100 - PAID_LEAVE_PERCENTAGE) / 100
-            )
-            customer["amount"] = customer["amount"] - paid_leave_discount
-
-        final_amount = customer["amount"] + ppn + current_unique_code
-        invoice_data = {
-            "id_customer": ObjectId(customer["_id"]),
-            "name": customer["name"],
-            "service_number": customer["service_number"],
-            "package": customer["package"],
-            "due_date": datetime.strptime(
-                f"{target_year}-{target_month}-{customer_due_date} 23:59:59",
-                "%Y-%m-%d %H:%M:%S",
-            ),
-            "add_on_packages": customer["add_on_packages"],
-            "month": target_month,
-            "year": target_year,
-            "status": "UNPAID",
-            "package_amount": customer["package_amount"],
-            "add_on_package_amount": customer["add_on_package_amount"],
-            "ppn": ppn,
-            "unique_code": current_unique_code,
-            "amount": final_amount,
-            "created_at": GetCurrentDateTime(),
-        }
-        if paid_leave_discount:
-            invoice_data["paid_leave_discount"] = paid_leave_discount
-
-        invoice_result = await CreateOneData(db.invoices, invoice_data)
-        if not invoice_result.inserted_id:
-            raise HTTPException(
-                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
-            )
-
-        if is_send_whatsapp:
-            await SendWhatsappPaymentCreatedMessage(db, str(invoice_result.inserted_id))
-            if is_delay:
-                time.sleep(3)
-
-        invoice_created += 1
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentCreatedMessage(db, invoice_ids))
 
     return JSONResponse(
         content={
@@ -486,14 +492,12 @@ async def print_invoice_thermal(
 @router.get("/created")
 async def invoice_whatsapp_created(
     id: str = None,
-    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    invoice_ids = []
     if id:
         decoded_id = base64.b64decode(id).decode("utf-8")
-        id_list = [item.strip() for item in decoded_id.split(",")]
-        for id in id_list:
-            await SendWhatsappPaymentCreatedMessage(db, id)
+        invoice_ids = [item.strip() for item in decoded_id.split(",")]
     else:
         from_date = GetCurrentDateTime().replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -501,22 +505,18 @@ async def invoice_whatsapp_created(
         to_date = (GetCurrentDateTime() + timedelta(days=4)).replace(
             hour=23, minute=59, second=59, microsecond=0
         )
-        invoice_data = await GetAggregateData(
+        invoice_ids = await GetDistinctData(
             db.invoices,
-            [
-                {
-                    "$match": {
-                        "status": InvoiceStatusData.UNPAID.value,
-                        "due_date": {"$gte": from_date, "$lte": to_date},
-                        "is_whatsapp_sended": {"$exists": False},
-                    },
-                },
-            ],
+            {
+                "status": InvoiceStatusData.UNPAID.value,
+                "due_date": {"$gte": from_date, "$lte": to_date},
+                "is_whatsapp_sended": {"$exists": False},
+            },
+            "_id",
         )
-        for item in invoice_data:
-            await SendWhatsappPaymentCreatedMessage(db, item["_id"])
-            if is_delay:
-                time.sleep(3)
+
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentCreatedMessage(db, invoice_ids))
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -524,14 +524,12 @@ async def invoice_whatsapp_created(
 @router.get("/whatsapp-reminder")
 async def invoice_whatsapp_reminder(
     id: str = None,
-    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    invoice_ids = []
     if id:
         decoded_id = base64.b64decode(id).decode("utf-8")
-        id_list = [item.strip() for item in decoded_id.split(",")]
-        for id in id_list:
-            await SendWhatsappPaymentReminderMessage(db, id)
+        invoice_ids = [item.strip() for item in decoded_id.split(",")]
     else:
         from_date = GetCurrentDateTime().replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -540,22 +538,18 @@ async def invoice_whatsapp_reminder(
             hour=23, minute=59, second=59, microsecond=0
         )
 
-        invoice_data = await GetAggregateData(
+        invoice_ids = await GetDistinctData(
             db.invoices,
-            [
-                {
-                    "$match": {
-                        "status": InvoiceStatusData.UNPAID.value,
-                        "due_date": {"$gte": from_date, "$lte": to_date},
-                        "is_whatsapp_reminder_sended": {"$exists": False},
-                    },
-                },
-            ],
+            {
+                "status": InvoiceStatusData.UNPAID.value,
+                "due_date": {"$gte": from_date, "$lte": to_date},
+                "is_whatsapp_reminder_sended": {"$exists": False},
+            },
+            "_id",
         )
-        for item in invoice_data:
-            await SendWhatsappPaymentReminderMessage(db, item["_id"])
-            if is_delay:
-                time.sleep(3)
+
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentReminderMessage(db, invoice_ids))
 
     return JSONResponse(content={"message": "Pengingat Telah Dikirimkan!"})
 
@@ -566,33 +560,23 @@ async def invoice_whatsapp_overdue(
     is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    invoice_ids = []
     if id:
         decoded_id = base64.b64decode(id).decode("utf-8")
-        id_list = [item.strip() for item in decoded_id.split(",")]
-        for id in id_list:
-            invoice_data = await GetOneData(
-                db.invoices,
-                {"_id": ObjectId(id)},
-            )
-            if not invoice_data:
-                continue
-
-            await SendWhatsappPaymentOverdueMessage(db, invoice_data["_id"])
+        invoice_ids = [item.strip() for item in decoded_id.split(",")]
     else:
-        pipeline = [
+        invoice_ids = await GetDistinctData(
+            db.invoices,
             {
-                "$match": {
-                    "status": InvoiceStatusData.UNPAID.value,
-                    "due_date": {"$lt": GetCurrentDateTime()},
-                    "is_whatsapp_overdue_sended": {"$exists": False},
-                }
-            }
-        ]
-        invoice_data = await GetAggregateData(db.invoices, pipeline)
-        for invoice in invoice_data:
-            await SendWhatsappPaymentOverdueMessage(db, invoice["_id"])
-            if is_delay:
-                time.sleep(3)
+                "status": InvoiceStatusData.UNPAID.value,
+                "due_date": {"$lt": GetCurrentDateTime()},
+                "is_whatsapp_overdue_sended": {"$exists": False},
+            },
+            "_id",
+        )
+
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentOverdueMessage(db, invoice_ids))
 
     return JSONResponse(content={"message": "Pesan Telah Dikirimkan!"})
 
@@ -600,13 +584,13 @@ async def invoice_whatsapp_overdue(
 @router.get("/isolir-customer")
 async def isolir_customer(
     id: str = None,
-    is_delay: bool = False,
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
+    invoice_ids = []
     if id:
         decoded_id = base64.b64decode(id).decode("utf-8")
-        id_list = [item.strip() for item in decoded_id.split(",")]
-        for id in id_list:
+        invoice_ids = [item.strip() for item in decoded_id.split(",")]
+        for id in invoice_ids:
             invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
             if not invoice_data:
                 continue
@@ -623,7 +607,6 @@ async def isolir_customer(
                 {"$set": {"status": CustomerStatusData.ISOLIR.value}},
             )
             await ActivateMikrotikPPPSecret(db, customer_data, True)
-            await SendWhatsappIsolirMessage(db, id)
     else:
         pipeline = [
             {
@@ -649,14 +632,10 @@ async def isolir_customer(
                     {"$set": {"status": CustomerStatusData.ISOLIR.value}},
                 )
                 await ActivateMikrotikPPPSecret(db, customer_data, True)
-                await SendWhatsappIsolirMessage(db, invoice["_id"])
-                await UpdateOneData(
-                    db.invoices,
-                    {"_id": ObjectId(invoice["_id"])},
-                    {"$set": {"is_whatsapp_isolir_sended": True}},
-                )
-                if is_delay:
-                    time.sleep(3)
+                invoice_ids.append(invoice["_id"])
+
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappIsolirMessage(db, invoice_ids))
 
     return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
 
@@ -685,9 +664,11 @@ async def activate_customer(
             {"$set": {"status": CustomerStatusData.ACTIVE.value}},
         )
         await ActivateMikrotikPPPSecret(db, customer_data, False)
-        await SendWhatsappCustomerActivatedMessage(db, invoice_data["id_customer"])
+        asyncio.create_task(
+            SendWhatsappCustomerActivatedMessage(db, invoice_data["id_customer"])
+        )
 
-    return JSONResponse(content={"message": "Pengguna Telah Diisolir!"})
+    return JSONResponse(content={"message": "Pengguna Telah Diaktifkan!"})
 
 
 @router.post("/add")
@@ -1039,7 +1020,7 @@ async def update_invoice(
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
@@ -1052,7 +1033,7 @@ async def update_invoice_status(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     decoded_id = base64.b64decode(id).decode("utf-8")
-    id_list = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    invoice_ids = [ObjectId(item.strip()) for item in decoded_id.split(",")]
     update_data = {}
     if status == InvoiceStatusData.PAID.value:
         update_data = {
@@ -1066,7 +1047,7 @@ async def update_invoice_status(
             },
         }
     elif status == InvoiceStatusData.UNPAID.value:
-        for id in id_list:
+        for id in invoice_ids:
             exist_data = await GetOneData(db.invoices, {"_id": id})
             if (
                 exist_data
@@ -1086,13 +1067,14 @@ async def update_invoice_status(
             },
         }
 
-    result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
+    result = await UpdateManyData(
+        db.invoices, {"_id": {"$in": invoice_ids}}, update_data
+    )
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     if status == InvoiceStatusData.PAID.value:
-        for id in id_list:
-            await SendWhatsappPaymentSuccessMessage(db, id)
+        for id in invoice_ids:
             await SendTelegramPaymentMessage(db, id)
             invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
             if invoice_data:
@@ -1111,78 +1093,32 @@ async def update_invoice_status(
 
                     await CheckMitraFee(db, customer_data, id)
 
+    if len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentSuccessMessage(db, invoice_ids))
+
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
-# @router.put("/update/collector-status")
-# async def update_invoice_collector_status(
-#         id: str,
-#         status: InvoiceStatusData,
-#         description: Optional[str] = None,
-#         assigned_to: Optional[str] = None,
-#         current_user: UserData = Depends(GetCurrentUser),
-#         db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
-#     ):
-#         if status not in (InvoiceStatusData.COLLECTING, InvoiceStatusData.COLLECTED):
-#             raise HTTPException(status_code=400, detail={"message": "Invalid collector status."})
 
-#         try:
-#             decoded = base64.b64decode(id).decode("utf-8")
-#             id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
-#             if not id_list:
-#                 raise ValueError
-#         except Exception:
-#             raise HTTPException(status_code=400, detail={"message": "Invalid ID format."})
-
-#         collector_data = {
-#             "description": description,
-#             "updated_by": current_user.email,
-#             "updated_at": GetCurrentDateTime(),
-#         }
-
-#         if assigned_to:
-#             collector_data["assigned_to"] = assigned_to
-
-#         if status == InvoiceStatusData.COLLECTED:
-#             collector_data["collected_at"] = GetCurrentDateTime()
-
-#         update_data = {
-#             "$set": {
-#                 "status": status.value,
-#                 "collector": collector_data,
-#             }
-#         }
-
-#         result = await UpdateManyData(
-#             db.invoices,
-#             {"_id": {"$in": id_list}},
-#             update_data
-#         )
-
-#         if not result or getattr(result, "modified_count", 0) == 0:
-#             raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
-
-#         return JSONResponse(
-#             content={
-#                 "message": DATA_HAS_UPDATED_MESSAGE,
-#                 "modified_count": result.modified_count
-#             }
-#         )
 @router.put("/update/collector-status")
 async def update_invoice_collector_status(
     id: str,
     status: InvoiceStatusData,
     description: Optional[str] = None,
     assigned_to: Optional[str] = None,
-    repeat_monthly: Optional[bool] = None, 
+    repeat_monthly: Optional[bool] = None,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     if status not in (InvoiceStatusData.COLLECTING, InvoiceStatusData.COLLECTED):
-        raise HTTPException(status_code=400, detail={"message": "Invalid collector status."})
+        raise HTTPException(
+            status_code=400, detail={"message": "Invalid collector status."}
+        )
 
     try:
         decoded = base64.b64decode(id).decode("utf-8")
-        id_list: List[ObjectId] = [ObjectId(i.strip()) for i in decoded.split(",") if i.strip()]
+        id_list: List[ObjectId] = [
+            ObjectId(i.strip()) for i in decoded.split(",") if i.strip()
+        ]
         if not id_list:
             raise ValueError
     except Exception:
@@ -1211,11 +1147,7 @@ async def update_invoice_collector_status(
         }
     }
 
-    result = await UpdateManyData(
-        db.invoices,
-        {"_id": {"$in": id_list}},
-        update_data
-    )
+    result = await UpdateManyData(db.invoices, {"_id": {"$in": id_list}}, update_data)
 
     if not result or getattr(result, "modified_count", 0) == 0:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
@@ -1223,7 +1155,7 @@ async def update_invoice_collector_status(
     return JSONResponse(
         content={
             "message": DATA_HAS_UPDATED_MESSAGE,
-            "modified_count": result.modified_count
+            "modified_count": result.modified_count,
         }
     )
 

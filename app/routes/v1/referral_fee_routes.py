@@ -1,3 +1,4 @@
+import asyncio
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Body, HTTPException
 from fastapi.responses import JSONResponse
@@ -288,11 +289,13 @@ async def request_referral_fee(
     if not result.inserted_id:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
-    await SendWhatsappFeeRequestedMessage(
-        db,
-        user_data.get("name", "Tidak Diketahui"),
-        payload["nominal"],
-        payload["reason"],
+    asyncio.create_task(
+        SendWhatsappFeeRequestedMessage(
+            db,
+            user_data.get("name", "Tidak Diketahui"),
+            payload["nominal"],
+            payload["reason"],
+        )
     )
     return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 

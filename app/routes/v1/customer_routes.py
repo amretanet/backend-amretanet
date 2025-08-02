@@ -1,3 +1,4 @@
+import asyncio
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -28,10 +29,8 @@ from app.modules.generals import (
     GenerateReferralCode,
     GetCurrentDateTime,
 )
-from app.modules.whatsapp_message import (
-    SendWhatsappMessage,
-    SendWhatsappTicketOpenMessage,
-)
+from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
+from app.modules.mpwa_whatsapp_message import SendMPWAWhatsappSingleMessage
 from app.modules.telegram_message import SendTelegramTicketOpenMessage
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
@@ -798,7 +797,7 @@ async def register_customer(
             "created_by": insert_user_result.inserted_id,
         }
         result = await CreateOneData(db.tickets, ticket_data)
-        await SendWhatsappTicketOpenMessage(db, str(result.inserted_id))
+        asyncio.create_task(SendWhatsappTicketOpenMessage(db, str(result.inserted_id)))
         await SendTelegramTicketOpenMessage(db, str(result.inserted_id))
         notification_data = {
             "title": "Pemasangan Baru",
@@ -821,7 +820,7 @@ async def register_customer(
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
@@ -934,7 +933,7 @@ async def create_customer(
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
@@ -1050,7 +1049,7 @@ async def update_customer(
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
@@ -1104,7 +1103,7 @@ async def update_customer_status(
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
-        print(e)
+        print(str(e))
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
 
@@ -1136,13 +1135,15 @@ async def reject_customer(
         await DeleteMikrotikPPPSecret(db, exist_data)
         v_message = "*Pengajuan Pelanggan Ditolak* \n\n"
         v_message += f"Mohon maaf, Pengajuan pelanggan atas nama {exist_data.get('name')} ditolak dengan alasan {reason}"
-        await SendWhatsappMessage(exist_data.get("phone_number"), v_message)
+        await SendMPWAWhatsappSingleMessage(exist_data.get("phone_number"), v_message)
         if "referral" in exist_data:
             referral_user = await GetOneData(
                 db.users, {"referral": exist_data.get("referral")}
             )
             if referral_user:
-                await SendWhatsappMessage(referral_user.get("phone_number"), v_message)
+                await SendMPWAWhatsappSingleMessage(
+                    referral_user.get("phone_number"), v_message
+                )
 
         return JSONResponse(content={"message": DATA_HAS_DELETED_MESSAGE})
 

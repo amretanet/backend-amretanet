@@ -1,3 +1,4 @@
+import asyncio
 from bson import ObjectId
 from fastapi import (
     APIRouter,
@@ -325,7 +326,8 @@ async def create_ticket(
 
     if notification_data:
         await CreateOneData(db.notifications, notification_data)
-    await SendWhatsappTicketOpenMessage(db, str(result.inserted_id))
+
+    asyncio.create_task(SendWhatsappTicketOpenMessage(db, str(result.inserted_id)))
     await SendTelegramTicketOpenMessage(db, str(result.inserted_id))
 
     return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
@@ -390,8 +392,8 @@ async def update_ticket(
             "created_at": GetCurrentDateTime(),
         }
         await CreateOneData(db.notifications, notification_data)
-        await SendWhatsappTicketOpenMessage(
-            db, exist_data["_id"], is_only_assignee=True
+        asyncio.create_task(
+            SendWhatsappTicketOpenMessage(db, exist_data["_id"], is_only_assignee=True)
         )
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
@@ -474,7 +476,7 @@ async def close_ticket(
                 notification_data["id_user"] = ObjectId(user["_id"])
                 await CreateOneData(db.notifications, notification_data.copy())
 
-    await SendWhatsappTicketClosedMessage(db, id)
+    asyncio.create_task(SendWhatsappTicketClosedMessage(db, id))
     await SendTelegramTicketClosedMessage(db, id)
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})

@@ -24,8 +24,8 @@ MOOTA_API_TOKEN = os.getenv("MOOTA_API_TOKEN")
 MOOTA_BANK_ACCOUNT_ID = os.getenv("MOOTA_BANK_ACCOUNT_ID")
 WHATSAPP_ADMIN_NUMBER = os.getenv("WHATSAPP_ADMIN_NUMBER")
 WHATSAPP_BOT_NUMBER = os.getenv("WHATSAPP_BOT_NUMBER")
-WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY")
-WHATSAPP_GATEWAY_URL = os.getenv("WHATSAPP_GATEWAY_URL")
+MPWA_API_TOKEN = os.getenv("MPWA_API_TOKEN")
+MPWA_API_URL = os.getenv("MPWA_API_URL")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_INSTALLATION_THREAD_ID = os.getenv("TELEGRAM_INSTALLATION_THREAD_ID")
@@ -98,12 +98,12 @@ def send_whatsapp_payment_success(id_invoice):
                 message = message.replace(key, "-")
 
         params = {
-            "api_key": WHATSAPP_API_KEY,
+            "api_key": MPWA_API_TOKEN,
             "sender": WHATSAPP_BOT_NUMBER,
             "number": f"62{customer_data['phone_number']}",
             "message": message,
         }
-        whatsapp_api_url = f"{WHATSAPP_GATEWAY_URL}/send-message"
+        whatsapp_api_url = f"{MPWA_API_URL}/send-message"
         requests.post(whatsapp_api_url, json=params, timeout=60)
     except Exception as e:
         print(str(e))
