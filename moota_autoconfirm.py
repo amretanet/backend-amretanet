@@ -89,17 +89,17 @@ async def main():
                 }
                 await UpdateOneData(
                     db.incomes,
-                    {"id_invoice": invoice["_id"]},
+                    {"id_invoice": ObjectId(invoice["_id"])},
                     {"$set": income_data},
                     upsert=True,
                 )
                 await UpdateOneData(
                     db.customers,
-                    {"_id": invoice["id_customer"]},
+                    {"_id": ObjectId(invoice["id_customer"])},
                     {"$set": {"status": CustomerStatusData.ACTIVE.value}},
                 )
                 customer_data = await GetOneData(
-                    db.customers, {"_id": invoice["id_customer"]}
+                    db.customers, {"_id": ObjectId(invoice["id_customer"])}
                 )
                 if customer_data:
                     await ActivateMikrotikPPPSecret(db, customer_data, False)
