@@ -14,6 +14,7 @@ from app.models.notifications import NotificationTypeData
 from app.models.generals import Pagination, SortingDirection
 from app.models.tickets import TicketStatusData, TicketTypeData
 from app.models.users import UserData, UserRole
+from app.modules.geodistances import GetNearestODP
 from app.modules.crud_operations import (
     CreateOneData,
     DeleteOneData,
@@ -781,12 +782,25 @@ async def register_customer(
         payload["pppoe_password"] = GenerateRandomString(str(payload["service_number"]))
         payload["status"] = CustomerStatusData.PENDING.value
         payload["registered_at"] = GetCurrentDateTime()
+        odp = await GetNearestODP(
+            db,
+            longitude=payload.get("location", {}).get("longitude", 0),
+            latitude=payload.get("location", {}).get("latitude", 0),
+        )
+        if odp:
+            try:
+                payload["id_odp"] = ObjectId(odp["_id"])
+            except Exception as e:
+                print(str(e))
+                pass
+
         insert_customer_result = await CreateOneData(db.customers, payload)
         if not insert_customer_result.inserted_id:
             await DeleteOneData(db.users, {"email": user_data["email"]})
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
+
         ticket_data = {
             "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
             "status": TicketStatusData.PENDING,
