@@ -19,6 +19,12 @@ class InvoiceStatusData(str, Enum):
     COLLECTED = "COLLECTED"
 
 
+class InvoiceOwnerVerifiedStatusData(str, Enum):
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    PENDING = "PENDING"
+
+
 class InvoiceInsertData(BaseModel):
     id_customer: str
     month: str

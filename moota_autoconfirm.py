@@ -8,6 +8,7 @@ from app.modules.generals import DateIDFormatter, GetCurrentDateTime
 from app.models.payments import PaymentMethodData
 from app.modules.mikrotik import ActivateMikrotikPPPSecret
 from app.modules.whatsapp_message import SendWhatsappPaymentSuccessMessage
+from app.models.invoices import InvoiceOwnerVerifiedStatusData
 from app.routes.v1.invoice_routes import CheckMitraFee
 import requests
 from app.modules.telegram_message import SendTelegramPaymentMessage
@@ -72,6 +73,7 @@ async def main():
                     "payment.description": f"Pembayaran Tagihan Periode {DateIDFormatter(str(invoice.get('due_date')))} (By Moota)",
                     "payment.confirmed_at": GetCurrentDateTime(),
                     "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
+                    "owner_verified_status": InvoiceOwnerVerifiedStatusData.ACCEPTED.value,
                 }
                 await UpdateOneData(
                     db.invoices,

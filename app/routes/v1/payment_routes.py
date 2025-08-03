@@ -12,7 +12,7 @@ from fastapi import (
 )
 import urllib.parse
 from app.models.notifications import NotificationTypeData
-from app.models.invoices import InvoiceStatusData
+from app.models.invoices import InvoiceOwnerVerifiedStatusData, InvoiceStatusData
 from app.models.payments import (
     PaymentPayOffData,
     RequestConfirmData,
@@ -133,7 +133,12 @@ async def pay_off_payment(
             "confirmed_by": current_user.email,
             "confirmed_at": now,
         },
+        "owner_verified_status": InvoiceOwnerVerifiedStatusData.PENDING.value,
     }
+    if current_user.role == UserRole.OWNER.value:
+        update_data["owner_verified_status"] = (
+            InvoiceOwnerVerifiedStatusData.ACCEPTED.value
+        )
 
     if "image_url" in payload:
         update_data["payment"]["image_url"] = payload["image_url"]
@@ -210,20 +215,26 @@ async def confirm_payment(
         if not invoice_data:
             continue
 
+        update_data = {
+            "status": InvoiceStatusData.PAID,
+            "payment.confirmed_by": current_user.email,
+            "payment.confirmed_at": GetCurrentDateTime(),
+            "owner_verified_status": InvoiceOwnerVerifiedStatusData.PENDING.value,
+        }
+        if current_user.role == UserRole.OWNER.value:
+            update_data["owner_verified_status"] = (
+                InvoiceOwnerVerifiedStatusData.ACCEPTED.value
+            )
+
         result = await UpdateOneData(
             db.invoices,
             {"_id": ObjectId(id)},
-            {
-                "$set": {
-                    "status": InvoiceStatusData.PAID,
-                    "payment.confirmed_by": current_user.email,
-                    "payment.confirmed_at": GetCurrentDateTime(),
-                }
-            },
+            {"$set": update_data},
             upsert=True,
         )
         if not result:
             continue
+
         income_data = {
             "id_invoice": ObjectId(id),
             "nominal": invoice_data.get("amount", 0),
@@ -480,6 +491,7 @@ async def ipaymu_payment_callback(
                         "payment.confirmed_at": GetCurrentDateTime(),
                         "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
                         "payment.channel": channel,
+                        "owner_verified_status": InvoiceOwnerVerifiedStatusData.ACCEPTED.value,
                     }
                 },
                 upsert=True,

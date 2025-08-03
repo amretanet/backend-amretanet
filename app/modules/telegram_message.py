@@ -275,7 +275,6 @@ async def SendTelegramTicketClosedMessage(db, id_ticket: str):
 async def SendTelegramPaymentMessage(db, id_invoice):
     try:
         invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
-        print(invoice_data)
         if not invoice_data:
             return
 

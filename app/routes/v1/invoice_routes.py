@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models.invoices import (
     InvoiceInsertData,
+    InvoiceOwnerVerifiedStatusData,
     InvoiceSortingsData,
     InvoiceStatusData,
     InvoiceUpdateData,
@@ -70,6 +71,7 @@ async def get_invoice(
     month: str = None,
     year: str = None,
     status: str = None,
+    owner_verified_status: InvoiceOwnerVerifiedStatusData = None,
     page: int = 1,
     items: int = 1,
     sort_key: InvoiceSortingsData = InvoiceSortingsData.DUE_DATE.value,
@@ -100,6 +102,8 @@ async def get_invoice(
         query["month"] = month
     if year:
         query["year"] = year
+    if owner_verified_status is not None:
+        query["owner_verified_status"] = owner_verified_status
 
     pipeline = [
         {"$match": query},
@@ -1076,6 +1080,26 @@ async def update_invoice_status(
 
     if len(invoice_ids) > 0:
         asyncio.create_task(SendWhatsappPaymentSuccessMessage(db, invoice_ids))
+
+    return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
+
+
+@router.put("/update/owner-verified-status")
+async def update_invoice_owner_verified_status(
+    id: str,
+    owner_verified_status: InvoiceOwnerVerifiedStatusData,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    decoded_id = base64.b64decode(id).decode("utf-8")
+    invoice_ids = [ObjectId(item.strip()) for item in decoded_id.split(",")]
+    update_data = {"owner_verified_status": owner_verified_status}
+
+    result = await UpdateManyData(
+        db.invoices, {"_id": {"$in": invoice_ids}}, {"$set": update_data}
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
     return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
