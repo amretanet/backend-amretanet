@@ -74,11 +74,13 @@ async def main():
                     "payment.confirmed_by": AUTOCONFIRM_USER_EMAIL,
                 }
                 await UpdateOneData(
-                    db.invoices, {"_id": invoice["_id"]}, {"$set": confirm_data}
+                    db.invoices,
+                    {"_id": ObjectId(invoice["_id"])},
+                    {"$set": confirm_data},
                 )
                 confirmed += 1
                 income_data = {
-                    "id_invoice": invoice["_id"],
+                    "id_invoice": ObjectId(invoice["_id"]),
                     "nominal": invoice.get("amount", 0),
                     "category": "BAYAR TAGIHAN",
                     "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice.get('service_number', '-')} a/n {invoice.get('name', '-')}, Periode {DateIDFormatter(str(invoice.get('due_date')))}",
@@ -106,7 +108,7 @@ async def main():
                     await CheckMitraFee(db, customer_data, invoice["_id"])
 
                 success_invoice_ids.append(invoice["_id"])
-                await SendTelegramPaymentMessage(db, id)
+                await SendTelegramPaymentMessage(db, invoice["_id"])
                 try:
                     mutation_id = result[0].get("mutation_id")
                     notes_url = (
@@ -128,6 +130,7 @@ async def main():
             print(str(e))
 
     if len(success_invoice_ids) > 0:
+        print("Sending Whatsapp Message...")
         await SendWhatsappPaymentSuccessMessage(db, success_invoice_ids)
 
     await DisconnectMongoDB()

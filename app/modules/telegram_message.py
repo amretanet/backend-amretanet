@@ -119,20 +119,20 @@ async def SendTelegramTicketOpenMessage(db, id_ticket: str):
         )
         v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
         if "assignee" in ticket_data:
-            v_message += f"*Teknisi*: {ticket_data.get('assignee', '').get('name')}\n\n"
+            v_message += f"*Teknisi*: {ticket_data.get('assignee', {}).get('name')}\n\n"
         if "customer" in ticket_data:
             v_message += (
-                f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
+                f"*Nama Pelanggan*: {ticket_data.get('customer', {}).get('name')}\n"
             )
-            v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
-            v_message += f"*Username PPPOE*: {ticket_data.get('customer', '').get('pppoe_username')}\n"
-            v_message += f"*Password PPPOE*: {ticket_data.get('customer', '').get('pppoe_password')}\n"
-            v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
+            v_message += f"*Nomor Layanan*: {ticket_data.get('customer', {}).get('service_number')}\n"
+            v_message += f"*Username PPPOE*: {ticket_data.get('customer', {}).get('pppoe_username')}\n"
+            v_message += f"*Password PPPOE*: {ticket_data.get('customer', {}).get('pppoe_password')}\n"
+            v_message += f"*Alamat*: {ticket_data.get('customer', {}).get('location', {}).get('address', '-')}\n"
         v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
         if "odc" in ticket_data:
-            v_message += f"*ODC*: {ticket_data.get('odc', '').get('name')}\n"
+            v_message += f"*ODC*: {ticket_data.get('odc', {}).get('name')}\n"
         if "odp" in ticket_data:
-            v_message += f"*ODP*: {ticket_data.get('odp', '').get('name')}"
+            v_message += f"*ODP*: {ticket_data.get('odp', {}).get('name')}"
 
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -228,20 +228,20 @@ async def SendTelegramTicketClosedMessage(db, id_ticket: str):
         )
         v_message += f"*Kode Tiket*: #{ticket_data.get('name', '-')}\n"
         if "assignee" in ticket_data:
-            v_message += f"*Teknisi*: {ticket_data.get('assignee', '').get('name')}\n\n"
+            v_message += f"*Teknisi*: {ticket_data.get('assignee', {}).get('name')}\n\n"
         if "customer" in ticket_data:
             v_message += (
-                f"*Nama Pelanggan*: {ticket_data.get('customer', '').get('name')}\n"
+                f"*Nama Pelanggan*: {ticket_data.get('customer', {}).get('name')}\n"
             )
-            v_message += f"*Nomor Layanan*: {ticket_data.get('customer', '').get('service_number')}\n"
-            v_message += f"*Username PPPOE*: {ticket_data.get('customer', '').get('pppoe_username')}\n"
-            v_message += f"*Password PPPOE*: {ticket_data.get('customer', '').get('pppoe_password')}\n"
-            v_message += f"*Alamat*: {ticket_data.get('customer', '').get('location', '').get('address', '-')}\n"
+            v_message += f"*Nomor Layanan*: {ticket_data.get('customer', {}).get('service_number')}\n"
+            v_message += f"*Username PPPOE*: {ticket_data.get('customer', {}).get('pppoe_username')}\n"
+            v_message += f"*Password PPPOE*: {ticket_data.get('customer', {}).get('pppoe_password')}\n"
+            v_message += f"*Alamat*: {ticket_data.get('customer', {}).get('location', {}).get('address', '-')}\n"
         v_message += f"*Deskripsi*: {ticket_data.get('description', '')}\n"
         if ticket_data.get("odc"):
-            v_message += f"*ODC*: {ticket_data.get('odc', '').get('name')}\n"
+            v_message += f"*ODC*: {ticket_data.get('odc', {}).get('name')}\n"
         if ticket_data.get("odp"):
-            v_message += f"*ODP*: {ticket_data.get('odp', '').get('name')}\n"
+            v_message += f"*ODP*: {ticket_data.get('odp', {}).get('name')}\n"
         if ticket_data.get("re_odp"):
             v_message += f"*Redaman ODP*: {ticket_data.get('re_odp', '')}dB\n"
         if ticket_data.get("re_ont"):
@@ -275,6 +275,7 @@ async def SendTelegramTicketClosedMessage(db, id_ticket: str):
 async def SendTelegramPaymentMessage(db, id_invoice):
     try:
         invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id_invoice)})
+        print(invoice_data)
         if not invoice_data:
             return
 
@@ -285,14 +286,12 @@ async def SendTelegramPaymentMessage(db, id_invoice):
             f"*Tagihan*: Rp{ThousandSeparator(invoice_data.get('amount', 0))}\n"
         )
         v_message += f"*Periode*: {DateIDFormatter(invoice_data.get('due_date'))}\n"
-        v_message += f"*Tanggal Pembayaran*: {DateIDFormatter(invoice_data.get('payment').get('paid_at'))}\n"
+        v_message += f"*Tanggal Pembayaran*: {DateIDFormatter(invoice_data.get('payment', {}).get('paid_at'))}\n"
         v_message += (
-            f"*Metode Pembayaran*: {invoice_data.get('payment').get('method')}\n"
+            f"*Metode Pembayaran*: {invoice_data.get('payment', {}).get('method')}\n"
         )
-        if invoice_data.get("payment").get("method") in ["TRANSFER", "QRIS"]:
-            v_message += (
-                f"*Bukti Pembayaran*: {invoice_data.get('payment').get('image_url')}\n"
-            )
+        if invoice_data.get("payment", {}).get("method") in ["TRANSFER", "QRIS"]:
+            v_message += f"*Bukti Pembayaran*: {invoice_data.get('payment', {}).get('image_url')}\n"
 
         params = {
             "chat_id": TELEGRAM_MANAGEMENT_CHAT_ID,
@@ -304,4 +303,5 @@ async def SendTelegramPaymentMessage(db, id_invoice):
         requests.get(telegram_api_url)
 
     except Exception as e:
+        print(str(e))
         await CreateTelegramErrorNotification(db, str(e))
