@@ -1,4 +1,3 @@
-import asyncio
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -31,9 +30,8 @@ from app.modules.generals import (
     GenerateUniqueCode,
     GetCurrentDateTime,
 )
-from app.modules.whatsapp_message import SendWhatsappTicketOpenMessage
 from app.modules.mpwa_whatsapp_message import SendMPWAWhatsappSingleMessage
-from app.modules.telegram_message import SendTelegramTicketOpenMessage
+from app.modules.telegram_message import SendTelegramNewCustomerMessage
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
@@ -813,8 +811,7 @@ async def register_customer(
             "created_by": insert_user_result.inserted_id,
         }
         result = await CreateOneData(db.tickets, ticket_data)
-        asyncio.create_task(SendWhatsappTicketOpenMessage(db, str(result.inserted_id)))
-        await SendTelegramTicketOpenMessage(db, str(result.inserted_id))
+        await SendTelegramNewCustomerMessage(db, str(result.inserted_id))
         notification_data = {
             "title": "Pemasangan Baru",
             "description": "Instalasi jaringan baru untuk Pelanggan",

@@ -61,6 +61,60 @@ async def SendTelegramImage(image_url: list, thread_id):
     print(response.json())
 
 
+async def SendTelegramNewCustomerMessage(db, id_customer: str):
+    try:
+        SHORTCUT_BUTTON = []
+        customer_data = await GetOneData(
+            db.customers,
+            {"_id": ObjectId(id_customer)},
+            {
+                "name": 1,
+                "location": 1,
+                "phone_number": 1,
+            },
+        )
+        if not customer_data:
+            return
+
+        v_message = "*⚠️ INFORMASI PEMASANGAN BARU*\n\n"
+        v_message += (
+            f"🗓️ *{DateIDFormatter(str(GetCurrentDateTime()), is_show_time=True)}*\n\n\n"
+        )
+        SHORTCUT_BUTTON.append(
+            {
+                "text": "📞Telp Pelanggan",
+                "url": f"https://wa.me/62{customer_data.get('phone_number')}",
+            },
+        )
+        SHORTCUT_BUTTON.append(
+            {
+                "text": "📍Cek Lokasi",
+                "url": f"https://www.google.com/maps?q={customer_data.get('location').get('latitude')},{customer_data.get('location').get('longitude')}",
+            },
+        )
+
+        v_message += f"*Nama*: {customer_data.get('name', '-')}\n"
+        v_message += (
+            f"*Alamat*: {customer_data.get('location', {}).get('address', '-')}\n"
+        )
+
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "message_thread_id": TELEGRAM_INSTALLATION_THREAD_ID,
+            "text": v_message,
+            "parse_mode": "Markdown",
+            "reply_markup": {"inline_keyboard": [SHORTCUT_BUTTON]},
+        }
+        telegram_api_url = (
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        )
+        response = requests.post(telegram_api_url, json=data)
+        return response.json()
+    except Exception as e:
+        print(e)
+        await CreateTelegramErrorNotification(db, str(e))
+
+
 async def SendTelegramTicketOpenMessage(db, id_ticket: str):
     try:
         SHORTCUT_BUTTON = []
