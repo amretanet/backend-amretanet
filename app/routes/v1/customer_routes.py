@@ -21,6 +21,7 @@ from app.modules.crud_operations import (
     GetAggregateData,
     GetManyData,
     GetOneData,
+    UpdateManyData,
     UpdateOneData,
 )
 from app.modules.mikrotik import ActivateMikrotikPPPSecret, DeleteMikrotikPPPSecret
@@ -49,8 +50,27 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_CUSTOMER_PASSWORD = os.getenv("DEFAULT_CUSTOMER_PASSWORD")
-DEFAULT_SERVICE_NUMBER = 19000000
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+async def UpdateRouterPostfix(db, id_router: str):
+    try:
+        exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
+        if not exist_router:
+            return
+
+        prefix = exist_router.get("service_number_prefix")
+        if not prefix:
+            return
+
+        result = await UpdateManyData(
+            db.router,
+            {"service_number_prefix": prefix},
+            {"$inc": {"service_number_postfix": 1}},
+        )
+        return result
+    except Exception:
+        return
 
 
 router = APIRouter(prefix="/customer", tags=["Customers"])
@@ -365,29 +385,36 @@ async def get_customer_maps(
     return JSONResponse(content={"customer_maps_data": customer_maps_data})
 
 
-@router.get("/next-service-number")
-async def get_next_service_number(
+@router.get("/generate-service-number")
+async def generate_service_number(
+    id_router: str,
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    service_number = DEFAULT_SERVICE_NUMBER
-    lates_service_number = await GetOneData(
-        db.customers,
-        {"service_number": {"$exists": True}},
-        sort_by="service_number",
-        sort_direction=-1,
-    )
-    if lates_service_number:
-        service_number = int(lates_service_number["service_number"]) + 1
+    exist_router = await GetOneData(db.router, {"_id": ObjectId(id_router)})
+    if not exist_router:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Router Tidak Diketahui!"},
+        )
 
-    pppoe_username = str(service_number)
-    pppoe_password = GenerateRandomString(str(service_number))
+    prefix = exist_router.get("service_number_prefix", 0)
+    postfix = exist_router.get("service_number_postfix", 0)
+    if not prefix:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Prefiks Router Tidak Diketahui!"},
+        )
 
+    digit_count = 7
+    digit_postfix = digit_count - len(str(prefix))
+
+    service_number = f"{prefix}{str(postfix).zfill(digit_postfix)}"
     return JSONResponse(
         content={
-            "service_number": service_number,
-            "pppoe_username": pppoe_username,
-            "pppoe_password": pppoe_password,
+            "service_number": int(service_number),
+            "pppoe_username": service_number,
+            "pppoe_password": GenerateRandomString(str(service_number)),
         }
     )
 
@@ -716,16 +743,7 @@ async def register_customer(
 ):
     try:
         payload = data.dict(exclude_unset=True)
-        payload["service_number"] = DEFAULT_SERVICE_NUMBER
         payload["unique_code"] = await GenerateUniqueCode(db)
-        lates_service_number = await GetOneData(
-            db.customers,
-            {"service_number": {"$exists": True}},
-            sort_by="service_number",
-            sort_direction=-1,
-        )
-        if lates_service_number:
-            payload["service_number"] = int(lates_service_number["service_number"]) + 1
 
         # check exist id card number
         exist_id_card_number = await GetOneData(
@@ -777,10 +795,9 @@ async def register_customer(
         # formatting payload
         payload["id_user"] = insert_user_result.inserted_id
         payload["id_package"] = ObjectId(payload["id_package"])
-        payload["pppoe_username"] = str(payload["service_number"])
-        payload["pppoe_password"] = GenerateRandomString(str(payload["service_number"]))
         payload["status"] = CustomerStatusData.PENDING.value
         payload["registered_at"] = GetCurrentDateTime()
+        payload["created_at"] = GetCurrentDateTime()
         odp = await GetNearestODP(
             db,
             longitude=payload.get("location", {}).get("longitude", 0),
@@ -945,8 +962,9 @@ async def create_customer(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
 
-        return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
+        await UpdateRouterPostfix(db, str(payload["id_router"]))
 
+        return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
@@ -1042,6 +1060,9 @@ async def update_customer(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
+
+        if exist_data.get("service_number") != payload.get("service_number"):
+            await UpdateRouterPostfix(db, str(payload["id_router"]))
 
         update_user = {}
         if "name" in payload:
