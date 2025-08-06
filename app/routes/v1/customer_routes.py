@@ -1,3 +1,4 @@
+import asyncio
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -810,8 +811,10 @@ async def register_customer(
             "created_at": GetCurrentDateTime(),
             "created_by": insert_user_result.inserted_id,
         }
-        result = await CreateOneData(db.tickets, ticket_data)
-        await SendTelegramNewCustomerMessage(db, str(result.inserted_id))
+        await CreateOneData(db.tickets, ticket_data)
+        asyncio.create_task(
+            SendTelegramNewCustomerMessage(db, str(insert_customer_result.inserted_id))
+        )
         notification_data = {
             "title": "Pemasangan Baru",
             "description": "Instalasi jaringan baru untuk Pelanggan",

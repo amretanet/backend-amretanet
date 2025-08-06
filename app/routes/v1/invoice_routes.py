@@ -1060,7 +1060,7 @@ async def update_invoice_status(
 
     if status == InvoiceStatusData.PAID.value:
         for id in invoice_ids:
-            await SendTelegramPaymentMessage(db, id)
+            asyncio.create_task(SendTelegramPaymentMessage(db, id))
             invoice_data = await GetOneData(db.invoices, {"_id": ObjectId(id)})
             if invoice_data:
                 customer_data = await GetOneData(

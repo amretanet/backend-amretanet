@@ -110,7 +110,7 @@ async def main():
                     await CheckMitraFee(db, customer_data, invoice["_id"])
 
                 success_invoice_ids.append(invoice["_id"])
-                await SendTelegramPaymentMessage(db, invoice["_id"])
+                asyncio.create_task(SendTelegramPaymentMessage(db, invoice["_id"]))
                 try:
                     mutation_id = result[0].get("mutation_id")
                     notes_url = (

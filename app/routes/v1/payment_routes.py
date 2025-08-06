@@ -172,7 +172,7 @@ async def pay_off_payment(
     )
 
     asyncio.create_task(SendWhatsappPaymentSuccessMessage(db, [id]))
-    await SendTelegramPaymentMessage(db, id)
+    asyncio.create_task(SendTelegramPaymentMessage(db, id))
     customer_data = await GetOneData(
         db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
     )
@@ -250,7 +250,7 @@ async def confirm_payment(
         )
 
         asyncio.create_task(SendWhatsappPaymentSuccessMessage(db, [id]))
-        await SendTelegramPaymentMessage(db, id)
+        asyncio.create_task(SendTelegramPaymentMessage(db, id))
 
         customer_data = await GetOneData(
             db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
@@ -517,7 +517,7 @@ async def ipaymu_payment_callback(
             )
 
             asyncio.create_task(SendWhatsappPaymentSuccessMessage(db, [id_invoice]))
-            await SendTelegramPaymentMessage(db, id_invoice)
+            asyncio.create_task(SendTelegramPaymentMessage(db, id_invoice))
 
             customer_data = await GetOneData(
                 db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
