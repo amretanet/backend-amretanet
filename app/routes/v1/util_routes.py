@@ -12,7 +12,7 @@ from app.models.generals import UploadImageType
 from app.modules.generals import GetCurrentDateTime
 from pathlib import Path
 import shutil
-from app.modules.crud_operations import GetOneData, UpdateOneData
+from app.modules.crud_operations import UpdateOneData
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
 import os
 from passlib.context import CryptContext

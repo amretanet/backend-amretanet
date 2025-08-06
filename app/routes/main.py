@@ -13,6 +13,7 @@ from app.routes.v1 import (
     odp_routes,
     router_routes,
     util_routes,
+    inventory_routes,
     information_routes,
     user_routes,
     invoice_routes,
@@ -35,6 +36,7 @@ router.include_router(coverage_area_routes.router)
 router.include_router(customer_routes.router)
 router.include_router(configuration_routes.router)
 router.include_router(expenditure_routes.router)
+router.include_router(inventory_routes.router)
 router.include_router(invoice_routes.router)
 router.include_router(income_routes.router)
 router.include_router(information_routes.router)
