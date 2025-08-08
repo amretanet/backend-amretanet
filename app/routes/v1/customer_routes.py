@@ -42,6 +42,7 @@ from app.modules.response_message import (
     SYSTEM_ERROR_MESSAGE,
     NOT_FOUND_MESSAGE,
 )
+from app.routes.v1.invoice_routes import CreateNewInvoice
 from app.routes.v1.auth_routes import GetCurrentUser
 from passlib.context import CryptContext
 import os
@@ -1129,6 +1130,7 @@ async def update_customer_status(
             raise HTTPException(
                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
             )
+
         if (
             status == CustomerStatusData.ACTIVE
             or status == CustomerStatusData.NONACTIVE
@@ -1138,6 +1140,22 @@ async def update_customer_status(
                 {"_id": ObjectId(exist_data["id_user"])},
                 {"$set": {"status": status}},
             )
+
+        # create_invoice
+        if (
+            exist_data.get("billing_type") == "PRABAYAR"
+            and exist_data.get("status") == CustomerStatusData.PENDING.value
+            and status == CustomerStatusData.ACTIVE.value
+        ):
+            create_invoice_payload = {
+                "id_customer": id,
+                "month": str(GetCurrentDateTime().month).zfill(2),
+                "year": str(GetCurrentDateTime().year),
+            }
+            await CreateNewInvoice(
+                db, payload=create_invoice_payload, is_send_whatsapp=True
+            )
+
         return JSONResponse(content={"message": DATA_HAS_UPDATED_MESSAGE})
 
     except HTTPException as http_err:

@@ -61,6 +61,193 @@ PPN = int(os.getenv("PPN"))
 PAID_LEAVE_PERCENTAGE = int(os.getenv("PAID_LEAVE_PERCENTAGE"))
 
 
+async def CreateNewInvoice(db, payload: dict, is_send_whatsapp: bool = False):
+    exist_invoice = await GetOneData(
+        db.invoices,
+        {
+            "id_customer": ObjectId(payload["id_customer"]),
+            "month": payload["month"],
+            "year": payload["year"],
+        },
+    )
+    if exist_invoice:
+        raise HTTPException(status_code=400, detail={"message": EXIST_DATA_MESSAGE})
+    max_date_of_month = monthrange(
+        GetCurrentDateTime().year, GetCurrentDateTime().month
+    )[1]
+    pipeline = []
+    query = {"_id": ObjectId(payload["id_customer"])}
+
+    # add filter query
+    pipeline.append({"$match": query})
+
+    # add join id package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "let": {"idPackage": "$id_package"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
+                    {
+                        "$project": {
+                            "name": 1,
+                            "price": 1,
+                        }
+                    },
+                    {"$limit": 1},
+                ],
+                "as": "package",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "package_amount": {
+                    "$ifNull": [{"$arrayElemAt": ["$package.price.regular", 0]}, 0]
+                }
+            }
+        }
+    )
+
+    # add join id add-on package query
+    pipeline.append(
+        {
+            "$lookup": {
+                "from": "packages",
+                "let": {"idAddOnPackage": "$id_add_on_package"},
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
+                            }
+                        }
+                    },
+                    {
+                        "$project": {
+                            "name": 1,
+                            "price": 1,
+                        }
+                    },
+                ],
+                "as": "add_on_packages",
+            }
+        }
+    )
+    pipeline.append(
+        {
+            "$addFields": {
+                "add_on_package_amount": {
+                    "$sum": {
+                        "$map": {
+                            "input": "$add_on_packages",
+                            "as": "add_on",
+                            "in": {"$ifNull": ["$$add_on.price.regular", 0]},
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    # counting package & add-on package price query
+    pipeline.append(
+        {
+            "$addFields": {
+                "amount": {"$add": ["$package_amount", "$add_on_package_amount"]}
+            },
+        }
+    )
+
+    # add projection query
+    pipeline.append(
+        {
+            "$project": {
+                "name": 1,
+                "service_number": 1,
+                "due_date": 1,
+                "ppn": 1,
+                "package": 1,
+                "package_amount": 1,
+                "add_on_packages": 1,
+                "add_on_package_amount": 1,
+                "amount": 1,
+                "status": 1,
+                "unique_code": 1,
+            }
+        }
+    )
+
+    customer_data = await GetAggregateData(db.customers, pipeline)
+    if len(customer_data) == 0:
+        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
+
+    invoice_exist = 0
+    invoice_created = 0
+    invoice_ids = []
+    for customer in customer_data:
+        customer_due_date = customer.get("due_date")
+        if int(customer_due_date) > max_date_of_month:
+            customer_due_date = str(max_date_of_month).zfill(2)
+
+        unique_code = customer.get("unique_code", 1)
+        ppn = 0
+        paid_leave_discount = 0
+        if customer.get("ppn", 0):
+            ppn = customer["amount"] * (PPN / 100)
+
+        if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
+            paid_leave_discount = customer["amount"] * (
+                (100 - PAID_LEAVE_PERCENTAGE) / 100
+            )
+            customer["amount"] = customer["amount"] - paid_leave_discount
+
+        final_amount = customer["amount"] + ppn + unique_code
+        invoice_data = {
+            "id_customer": ObjectId(customer["_id"]),
+            "name": customer["name"],
+            "service_number": customer["service_number"],
+            "package": customer["package"],
+            "due_date": datetime.strptime(
+                f"{payload['year']}-{payload['month']}-{customer_due_date} 23:59:59",
+                "%Y-%m-%d %H:%M:%S",
+            ),
+            "add_on_packages": customer["add_on_packages"],
+            "month": payload["month"],
+            "year": payload["year"],
+            "status": "UNPAID",
+            "package_amount": customer["package_amount"],
+            "add_on_package_amount": customer["add_on_package_amount"],
+            "ppn": ppn,
+            "unique_code": unique_code,
+            "amount": final_amount,
+            "created_at": GetCurrentDateTime(),
+        }
+        if paid_leave_discount:
+            invoice_data["paid_leave_discount"] = paid_leave_discount
+
+        invoice_result = await CreateOneData(db.invoices, invoice_data)
+        if not invoice_result.inserted_id:
+            raise HTTPException(
+                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+            )
+
+        invoice_ids.append(str(invoice_result.inserted_id))
+        invoice_created += 1
+
+    if is_send_whatsapp and len(invoice_ids) > 0:
+        asyncio.create_task(SendWhatsappPaymentCreatedMessage(db, invoice_ids))
+
+    return JSONResponse(
+        content={
+            "invoice_exist": invoice_exist,
+            "invoice_created": invoice_created,
+        }
+    )
+
+
 router = APIRouter(prefix="/invoice", tags=["Invoice"])
 
 
@@ -660,186 +847,8 @@ async def create_invoice(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
     payload = data.dict(exclude_unset=True)
-    exist_invoice = await GetOneData(
-        db.invoices,
-        {
-            "id_customer": ObjectId(payload["id_customer"]),
-            "month": payload["month"],
-            "year": payload["year"],
-        },
-    )
-    if exist_invoice:
-        raise HTTPException(status_code=400, detail={"message": EXIST_DATA_MESSAGE})
-
-    max_date_of_month = monthrange(
-        GetCurrentDateTime().year, GetCurrentDateTime().month
-    )[1]
-    pipeline = []
-    query = {"_id": ObjectId(payload["id_customer"])}
-
-    # add filter query
-    pipeline.append({"$match": query})
-
-    # add join id package query
-    pipeline.append(
-        {
-            "$lookup": {
-                "from": "packages",
-                "let": {"idPackage": "$id_package"},
-                "pipeline": [
-                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPackage"]}}},
-                    {
-                        "$project": {
-                            "name": 1,
-                            "price": 1,
-                        }
-                    },
-                    {"$limit": 1},
-                ],
-                "as": "package",
-            }
-        }
-    )
-    pipeline.append(
-        {
-            "$addFields": {
-                "package_amount": {
-                    "$ifNull": [{"$arrayElemAt": ["$package.price.regular", 0]}, 0]
-                }
-            }
-        }
-    )
-
-    # add join id add-on package query
-    pipeline.append(
-        {
-            "$lookup": {
-                "from": "packages",
-                "let": {"idAddOnPackage": "$id_add_on_package"},
-                "pipeline": [
-                    {
-                        "$match": {
-                            "$expr": {
-                                "$in": ["$_id", {"$ifNull": ["$$idAddOnPackage", []]}]
-                            }
-                        }
-                    },
-                    {
-                        "$project": {
-                            "name": 1,
-                            "price": 1,
-                        }
-                    },
-                ],
-                "as": "add_on_packages",
-            }
-        }
-    )
-    pipeline.append(
-        {
-            "$addFields": {
-                "add_on_package_amount": {
-                    "$sum": {
-                        "$map": {
-                            "input": "$add_on_packages",
-                            "as": "add_on",
-                            "in": {"$ifNull": ["$$add_on.price.regular", 0]},
-                        }
-                    }
-                }
-            }
-        }
-    )
-
-    # counting package & add-on package price query
-    pipeline.append(
-        {
-            "$addFields": {
-                "amount": {"$add": ["$package_amount", "$add_on_package_amount"]}
-            },
-        }
-    )
-
-    # add projection query
-    pipeline.append(
-        {
-            "$project": {
-                "name": 1,
-                "service_number": 1,
-                "due_date": 1,
-                "ppn": 1,
-                "package": 1,
-                "package_amount": 1,
-                "add_on_packages": 1,
-                "add_on_package_amount": 1,
-                "amount": 1,
-                "status": 1,
-                "unique_code": 1,
-            }
-        }
-    )
-
-    customer_data = await GetAggregateData(db.customers, pipeline)
-    if len(customer_data) == 0:
-        raise HTTPException(status_code=404, detail={"message": NOT_FOUND_MESSAGE})
-
-    invoice_exist = 0
-    invoice_created = 0
-    for customer in customer_data:
-        customer_due_date = customer.get("due_date")
-        if int(customer_due_date) > max_date_of_month:
-            customer_due_date = str(max_date_of_month).zfill(2)
-
-        unique_code = customer.get("unique_code", 1)
-        ppn = 0
-        paid_leave_discount = 0
-        if customer.get("ppn", 0):
-            ppn = customer["amount"] * (PPN / 100)
-
-        if customer["status"] == CustomerStatusData.PAID_LEAVE.value:
-            paid_leave_discount = customer["amount"] * (
-                (100 - PAID_LEAVE_PERCENTAGE) / 100
-            )
-            customer["amount"] = customer["amount"] - paid_leave_discount
-
-        final_amount = customer["amount"] + ppn + unique_code
-        invoice_data = {
-            "id_customer": ObjectId(customer["_id"]),
-            "name": customer["name"],
-            "service_number": customer["service_number"],
-            "package": customer["package"],
-            "due_date": datetime.strptime(
-                f"{payload['year']}-{payload['month']}-{customer_due_date} 23:59:59",
-                "%Y-%m-%d %H:%M:%S",
-            ),
-            "add_on_packages": customer["add_on_packages"],
-            "month": payload["month"],
-            "year": payload["year"],
-            "status": "UNPAID",
-            "package_amount": customer["package_amount"],
-            "add_on_package_amount": customer["add_on_package_amount"],
-            "ppn": ppn,
-            "unique_code": unique_code,
-            "amount": final_amount,
-            "created_at": GetCurrentDateTime(),
-        }
-        if paid_leave_discount:
-            invoice_data["paid_leave_discount"] = paid_leave_discount
-
-        invoice_result = await CreateOneData(db.invoices, invoice_data)
-        if not invoice_result.inserted_id:
-            raise HTTPException(
-                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
-            )
-
-        invoice_created += 1
-
-    return JSONResponse(
-        content={
-            "invoice_exist": invoice_exist,
-            "invoice_created": invoice_created,
-        }
-    )
+    result = await CreateNewInvoice(db, payload=payload)
+    return result
 
 
 @router.put("/update")
