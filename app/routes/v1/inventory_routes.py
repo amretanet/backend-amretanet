@@ -169,7 +169,7 @@ async def update_inventory(
             "_id": {"$ne": ObjectId(id)},
             "name": payload["name"],
             "id_category": ObjectId(payload["id_category"]),
-            "position": InventoryPositionData.WAREHOUSE.value,
+            "position": exist_data.get("position"),
         },
     )
     if exist_name:
