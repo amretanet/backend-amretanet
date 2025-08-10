@@ -50,13 +50,23 @@ class TicketUpdateData(BaseModel):
     status: Optional[TicketStatusData] = None
 
 
+class TicketPreconData(BaseModel):
+    id: Optional[str] = None
+    quantity: Optional[int] = None
+
+
+class TicketONTData(BaseModel):
+    id: Optional[str] = None
+    quantity: Optional[int] = None
+    serial_number: Optional[str] = None
+
+
 class TicketCloseData(BaseModel):
     id_odc: Optional[str] = None
     id_odp: Optional[str] = None
     tube: Optional[str] = None
-    cable: Optional[int] = None
-    hardware: Optional[str] = None
-    serial_number: Optional[str] = None
+    ont: Optional[TicketONTData] = None
+    precon: Optional[TicketPreconData] = None
     re_odp: Optional[int] = None
     re_ont: Optional[int] = None
     evidence: TicketEpidenceData

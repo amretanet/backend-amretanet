@@ -4,6 +4,7 @@ from app.routes.v1 import (
     bill_routes,
     ticket_routes,
     whatsapp_message_routes,
+    category_routes,
     coverage_area_routes,
     configuration_routes,
     customer_routes,
@@ -31,6 +32,7 @@ from app.routes.v1 import (
 router = APIRouter()
 router.include_router(auth_routes.router)
 router.include_router(bill_routes.router)
+router.include_router(category_routes.router)
 router.include_router(change_submission_routes.router)
 router.include_router(coverage_area_routes.router)
 router.include_router(customer_routes.router)

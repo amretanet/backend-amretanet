@@ -6,6 +6,7 @@ from fastapi import (
     Depends,
     HTTPException,
 )
+from app.models.inventory import InventoryPositionData
 from app.modules.response_message import (
     DATA_HAS_DELETED_MESSAGE,
     DATA_HAS_INSERTED_MESSAGE,
@@ -190,7 +191,33 @@ async def get_tickets(
         },
         {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
         {
+            "$lookup": {
+                "from": "inventories",
+                "let": {"idPrecon": "$precon.id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idPrecon"]}}},
+                    {"$limit": 1},
+                ],
+                "as": "precons",
+            }
+        },
+        {"$unwind": {"path": "$precons", "preserveNullAndEmptyArrays": True}},
+        {
+            "$lookup": {
+                "from": "inventories",
+                "let": {"idONT": "$ont.id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", "$$idONT"]}}},
+                    {"$limit": 1},
+                ],
+                "as": "onts",
+            }
+        },
+        {"$unwind": {"path": "$onts", "preserveNullAndEmptyArrays": True}},
+        {
             "$addFields": {
+                "precon.name": {"$ifNull": ["$precons.name", None]},
+                "ont.name": {"$ifNull": ["$onts.name", None]},
                 "reporter": {
                     "$ifNull": [{"$arrayElemAt": ["$reporter.name", 0]}, None]
                 },
@@ -441,10 +468,129 @@ async def close_ticket(
         payload["id_odp"] = ObjectId(payload["id_odp"])
         customer_update_data["id_odp"] = payload["id_odp"]
 
+    # update stock precon
+    if payload.get("precon", {}).get("id"):
+        payload["precon"]["id"] = ObjectId(payload["precon"]["id"])
+        precon_id = payload["precon"]["id"]
+        precon_quantity = payload.get("precon", {}).get("quantity", 0)
+        exist_precon = await GetOneData(db.inventories, {"_id": precon_id})
+        if not exist_precon:
+            raise HTTPException(
+                status_code=404, detail={"message": "Data Precon Tidak Tersedia!"}
+            )
+
+        if precon_quantity > exist_precon.get("quantity", 0):
+            raise HTTPException(
+                status_code=404,
+                detail={"message": "Jumlah Precon Melebihi Data Tersedia!"},
+            )
+        elif precon_quantity == exist_precon.get("quantity", 0):
+            await UpdateOneData(
+                db.inventories,
+                {"_id": precon_id},
+                {
+                    "$set": {
+                        "position": InventoryPositionData.CUSTOMER.value,
+                        "id_pic": ObjectId(exist_data.get("id_reporter")),
+                    }
+                },
+            )
+        else:
+            insert_data = {
+                "name": exist_precon.get("name"),
+                "id_category": ObjectId(exist_precon.get("id_category")),
+                "quantity": precon_quantity,
+                "unit": exist_precon.get("unit"),
+                "description": exist_precon.get("description"),
+                "position": InventoryPositionData.CUSTOMER.value,
+                "id_pic": ObjectId(exist_data.get("id_reporter")),
+                "created_at": GetCurrentDateTime(),
+            }
+            exist_customer_query = {
+                "name": insert_data["name"],
+                "id_category": insert_data["id_category"],
+                "id_pic": insert_data["id_pic"],
+            }
+            exist_customer_data = await GetOneData(db.inventories, exist_customer_query)
+            if exist_customer_data:
+                result = await UpdateOneData(
+                    db.inventories,
+                    exist_customer_query,
+                    {"$inc": {"quantity": insert_data["quantity"]}},
+                )
+            else:
+                result = await CreateOneData(db.inventories, insert_data)
+
+            await UpdateOneData(
+                db.inventories,
+                {"_id": precon_id},
+                {"$inc": {"quantity": precon_quantity * -1}},
+            )
+
+    # update stock ont
+    if payload.get("ont", {}.get("id")):
+        payload["ont"]["id"] = ObjectId(payload["ont"]["id"])
+        ont_id = payload["ont"]["id"]
+        ont_quantity = payload.get("ont", {}).get("quantity", 0)
+        exist_ont = await GetOneData(db.inventories, {"_id": ont_id})
+        if not exist_ont:
+            raise HTTPException(
+                status_code=404, detail={"message": "Data ONT Tidak Tersedia!"}
+            )
+
+        if ont_quantity > exist_ont.get("quantity", 0):
+            raise HTTPException(
+                status_code=404,
+                detail={"message": "Jumlah ONT Melebihi Data Tersedia!"},
+            )
+        elif ont_quantity == exist_ont.get("quantity", 0):
+            await UpdateOneData(
+                db.inventories,
+                {"_id": ont_id},
+                {
+                    "$set": {
+                        "position": InventoryPositionData.CUSTOMER.value,
+                        "id_pic": ObjectId(exist_data.get("id_reporter")),
+                    }
+                },
+            )
+        else:
+            insert_data = {
+                "name": exist_ont.get("name"),
+                "id_category": ObjectId(exist_ont.get("id_category")),
+                "quantity": ont_quantity,
+                "unit": exist_ont.get("unit"),
+                "description": exist_ont.get("description"),
+                "position": InventoryPositionData.CUSTOMER.value,
+                "id_pic": ObjectId(exist_data.get("id_reporter")),
+                "created_at": GetCurrentDateTime(),
+            }
+            exist_customer_query = {
+                "name": insert_data["name"],
+                "id_category": insert_data["id_category"],
+                "id_pic": insert_data["id_pic"],
+            }
+            exist_customer_data = await GetOneData(db.inventories, exist_customer_query)
+            if exist_customer_data:
+                result = await UpdateOneData(
+                    db.inventories,
+                    exist_customer_query,
+                    {"$inc": {"quantity": insert_data["quantity"]}},
+                )
+            else:
+                result = await CreateOneData(db.inventories, insert_data)
+
+            await UpdateOneData(
+                db.inventories,
+                {"_id": ont_id},
+                {"$inc": {"quantity": ont_quantity * -1}},
+            )
+
     result = await UpdateOneData(db.tickets, {"_id": ObjectId(id)}, {"$set": payload})
     if not result:
         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
+    # update customers
     if (
         exist_data.get("type") == TicketTypeData.PSB.value
         or payload.get("type") == TicketTypeData.PSB.value

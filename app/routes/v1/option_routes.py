@@ -10,7 +10,9 @@ from app.models.options import (
     SubdistrictOptionProjections,
     VillageOptionProjections,
 )
+from app.models.categories import CategoryTypeData
 from app.models.users import UserData
+from app.models.inventory import InventoryPositionData
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.crud_operations import GetAggregateData, GetDataCount
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
@@ -18,6 +20,56 @@ import requests
 from app.modules.mikrotik import GetMikrotikRouterDataByName, MikrotikConnection
 
 router = APIRouter(prefix="/options", tags=["Options"])
+
+
+@router.get("/inventory")
+async def get_inventory_options(
+    position: InventoryPositionData = InventoryPositionData.WAREHOUSE.value,
+    id_pic: str = None,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    query = {"quantity": {"$gt": 0}, "position": position.value}
+    if id_pic:
+        query["id_pic"] = ObjectId(id_pic)
+
+    pipeline = [
+        {"$match": query},
+        {
+            "$lookup": {
+                "from": "categories",
+                "localField": "id_category",
+                "foreignField": "_id",
+                "as": "category",
+            }
+        },
+        {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+        {"$addFields": {"category": "$category.name"}},
+    ]
+    inventory_options = await GetAggregateData(
+        db.inventories,
+        pipeline,
+        {
+            "_id": 1,
+            "name": 1,
+            "quantity": 1,
+            "category": 1,
+        },
+    )
+    return JSONResponse(content={"inventory_options": inventory_options})
+
+
+@router.get("/category")
+async def get_category_options(
+    type: CategoryTypeData = CategoryTypeData.INVENTORY.value,
+    current_user: UserData = Depends(GetCurrentUser),
+    db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+):
+    pipeline = [{"$match": {"type": type.value}}]
+    category_options = await GetAggregateData(
+        db.categories, pipeline, {"_id": 1, "name": 1}
+    )
+    return JSONResponse(content={"category_options": category_options})
 
 
 @router.get("/customer")
