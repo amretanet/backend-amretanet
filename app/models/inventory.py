@@ -24,10 +24,38 @@ InventoryRequestProjections = {
     "id_engineer": 1,
     "id_inventory": 1,
 }
+InventoryReportProjections = {
+    "name": 1,
+    "id_category": 1,
+    "category": {"$ifNull": ["$category.name", None]},
+    "quantity": 1,
+    "type": 1,
+    "unit": 1,
+    "description": 1,
+    "created_at": 1,
+    "created_by": {"$ifNull": ["$creator.name", None]},
+}
 
 
 # schemas
+class InventoryPositionData(str, Enum):
+    WAREHOUSE = "WAREHOUSE"
+    ONSITE = "ONSITE"
+    CUSTOMER = "CUSTOMER"
+    ENGINEER = "ENGINEER"
+
+
 class InventoryInsertData(BaseModel):
+    name: str
+    id_category: str
+    quantity: int
+    unit: str
+    description: Optional[str] = ""
+    position: InventoryPositionData
+    id_pic: Optional[str] = None
+
+
+class InventoryUpdateData(BaseModel):
     name: str
     id_category: str
     quantity: int
@@ -35,10 +63,10 @@ class InventoryInsertData(BaseModel):
     description: Optional[str] = ""
 
 
-class InventoryPositionData(str, Enum):
-    WAREHOUSE = "WAREHOUSE"
-    CUSTOMER = "CUSTOMER"
-    ENGINEER = "ENGINEER"
+class InventoryRepositionData(BaseModel):
+    quantity: int
+    position: InventoryPositionData
+    id_pic: Optional[str] = None
 
 
 class InventoryEngineerRequestStatusData(str, Enum):

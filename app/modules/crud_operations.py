@@ -30,7 +30,12 @@ async def GetDataCount(v_db_collection, v_query={}):
 
 
 async def GetOneData(
-    v_db_collection, v_query={}, v_projection={}, sort_by=None, sort_direction=-1
+    v_db_collection,
+    v_query={},
+    v_projection={},
+    sort_by=None,
+    sort_direction=-1,
+    is_json=True,
 ):
     sort_value = []
     if sort_by:
@@ -38,8 +43,10 @@ async def GetOneData(
 
     cursor = v_db_collection.find_one(v_query, v_projection, sort=sort_value)
     result = await cursor
-    result = json.dumps(result, default=JsonObjectFormatter)
-    result = json.loads(result)
+    if is_json:
+        result = json.dumps(result, default=JsonObjectFormatter)
+        result = json.loads(result)
+
     return result
 
 
