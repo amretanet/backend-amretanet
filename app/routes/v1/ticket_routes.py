@@ -528,7 +528,7 @@ async def close_ticket(
             )
 
     # update stock ont
-    if payload.get("ont", {}.get("id")):
+    if payload.get("ont", {}).get("id"):
         payload["ont"]["id"] = ObjectId(payload["ont"]["id"])
         ont_id = payload["ont"]["id"]
         ont_quantity = payload.get("ont", {}).get("quantity", 0)
