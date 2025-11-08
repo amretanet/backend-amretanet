@@ -274,7 +274,7 @@ async def change_password(
 async def list_collectors(
     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
 ):
-    collector_roles = [UserRole.ENGINEER.value, UserRole.BILL_COLLECTOR.value]
+    collector_roles = [UserRole.ENGINEER, UserRole.BILL_COLLECTOR]
     role_values = [role.value for role in collector_roles]
 
     cursor = db.users.find(

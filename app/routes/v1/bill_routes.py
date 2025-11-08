@@ -38,10 +38,9 @@ from app.modules.response_message import (
 )
 from app.routes.v1.auth_routes import GetCurrentUser
 from app.modules.database import AsyncIOMotorClient, GetAmretaDatabase
-
+ALLOWED_STATUSES = ["PAID", "COLLECTED"] 
 
 router = APIRouter(prefix="/bills", tags=["Bill Collector"])
-
 
 @router.get("")
 async def get_bills(
@@ -55,7 +54,7 @@ async def get_bills(
     sort_key: str = "due_date",
     sort_direction: str = "asc",
     current_user: UserData = Depends(GetCurrentUser),
-    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
+    db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase)
 ):
     query: Dict[str, Any] = {}
 
@@ -130,7 +129,7 @@ async def get_bills(
 
 @router.get("/assigned")
 async def get_assigned_bills(
-    assigned_to: str,
+    assigned_to: str | None = None,
     page: int = 1,
     items: int = 10,
     sort_key: str = "due_date",
@@ -138,9 +137,15 @@ async def get_assigned_bills(
     current_user: UserData = Depends(GetCurrentUser),
     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
 ):
-    # Only admin (role 1) can use this endpoint
-    if current_user.role != UserRole.OWNER.value:
+
+    if current_user.role not in [UserRole.OWNER.value, UserRole.BILL_COLLECTOR.value]:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+    if current_user.role == UserRole.BILL_COLLECTOR.value:
+        assigned_to = current_user.email
+
+    if not assigned_to:
+        raise HTTPException(status_code=400, detail="assigned_to parameter required")
 
     query = {"collector.assigned_to": assigned_to}
 
@@ -183,14 +188,34 @@ async def get_assigned_users(
     db: AsyncIOMotorDatabase = Depends(GetAmretaDatabase),
     current_user: UserData = Depends(GetCurrentUser),
 ):
-    # 🔐 Hanya untuk admin
+    # 🔐 Only OWNER can access
     if current_user.role != UserRole.OWNER.value:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Ambil distinct assigned_to dari invoice
     pipeline = [
         {"$match": {"collector.assigned_to": {"$ne": None}}},
-        {"$group": {"_id": "$collector.assigned_to"}},
+        {
+            "$group": {
+                "_id": "$collector.assigned_to",
+                "total_pembayaran": {
+                    "$sum": {
+                        "$cond": [
+                            {"$in": ["$status", ALLOWED_STATUSES]},
+                            {"$ifNull": ["$amount", 0]},
+                            0,
+                        ]
+                    }
+                },
+                "unique_customers": {"$addToSet": "$id_customer"},
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "total_pembayaran": 1,
+                "total_pelanggan": {"$size": "$unique_customers"},
+            }
+        },
         {
             "$lookup": {
                 "from": "users",
@@ -199,21 +224,34 @@ async def get_assigned_users(
                 "as": "user",
             }
         },
-        {"$unwind": "$user"},
+        {"$unwind": {"path": "$user", "preserveNullAndEmptyArrays": False}},
         {
             "$project": {
                 "email": "$_id",
                 "name": "$user.name",
                 "role": "$user.role",
+                "total_pembayaran": 1,
+                "total_pelanggan": 1,
                 "_id": 0,
             }
         },
+        {"$sort": {"name": 1}},
     ]
 
-    assigned_users = await db.invoices.aggregate(pipeline).to_list(length=None)
+    assigned_users_raw = await db.invoices.aggregate(pipeline).to_list(length=None)
+
+    assigned_users = [
+        {
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "total_pembayaran": user["total_pembayaran"],
+            "total_pelanggan": user["total_pelanggan"],
+        }
+        for user in assigned_users_raw
+    ]
 
     return JSONResponse(content={"assigned_users": assigned_users})
-
 
 @router.get("/detail/{id}")
 async def get_bill_detail(
@@ -256,7 +294,10 @@ async def pay_off_bill(
     current_user=Depends(GetCurrentUser),
     db=Depends(GetAmretaDatabase),
 ):
-    invoice_id = ObjectId(id)
+    try:
+        invoice_id = ObjectId(id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid invoice ID")
 
     invoice_data = await GetOneData(db.invoices, {"_id": invoice_id})
     if not invoice_data:
@@ -264,21 +305,21 @@ async def pay_off_bill(
 
     payload = data.dict(exclude_unset=True)
 
-    # Calculate total amount
-    invoice_data["amount"] = (
-        invoice_data.get("package_amount", 0)
-        + invoice_data.get("add_on_package_amount", 0)
-        + payload["unique_code"]
+    unique_code = payload.get("unique_code") or 0
+    total_amount = (
+        invoice_data.get("package_amount", 0) +
+        invoice_data.get("add_on_package_amount", 0) +
+        unique_code
     )
 
-    # Prepare update payload
     update_data = {
-        "status": BillStatusData.PAID,
-        "amount": invoice_data["amount"],
-        "unique_code": payload["unique_code"],
+        "status": "PAID",              
+        "collector.status": "PAID",    
+        "amount": total_amount,
+        "unique_code": unique_code,
         "payment": {
-            "method": payload["method"],
-            "description": payload["description"],
+            "method": "CASH",
+            "description": payload.get("description", ""),
             "paid_at": GetCurrentDateTime(),
             "confirmed_by": current_user.email,
             "confirmed_at": GetCurrentDateTime(),
@@ -288,58 +329,49 @@ async def pay_off_bill(
     if "image_url" in payload:
         update_data["payment"]["image_url"] = payload["image_url"]
 
-    result = await UpdateOneData(
-        db.invoices, {"_id": invoice_id}, {"$set": update_data}, upsert=True
+    result = await db.invoices.update_one(
+        {"_id": invoice_id},
+        {"$set": update_data}
     )
-    if not result:
-        raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
-    # Save income record
+    if result.modified_count == 0:
+        print(f"Invoice {invoice_id} already has the same status or amount.")
+
     income_data = {
         "id_invoice": invoice_id,
-        "nominal": invoice_data["amount"],
+        "nominal": total_amount,
         "category": "KOLEKSI TAGIHAN",
-        "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')} a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
-        "method": payload["method"],
+        "description": f"Pembayaran Tagihan dengan Nomor Layanan {invoice_data.get('service_number', '-')}"
+                       f" a/n {invoice_data.get('name', '-')}, Periode {DateIDFormatter(invoice_data.get('due_date'))}",
+        "method": "CASH",
         "date": GetCurrentDateTime(),
         "id_receiver": ObjectId(current_user.id),
         "created_at": GetCurrentDateTime(),
     }
+    await db.incomes.update_one({"id_invoice": invoice_id}, {"$set": income_data}, upsert=True)
 
-    await UpdateOneData(
-        db.incomes, {"id_invoice": invoice_id}, {"$set": income_data}, upsert=True
-    )
-
-    # Update customer status if needed
-    customer_data = await GetOneData(
-        db.customers, {"_id": ObjectId(invoice_data["id_customer"])}
-    )
+    customer_data = await GetOneData(db.customers, {"_id": ObjectId(invoice_data["id_customer"])})
     if customer_data:
-        status = customer_data.get("status")
-        if status != CustomerStatusData.ACTIVE and CustomerStatusData.FREE:
-            await UpdateOneData(
-                db.customers,
+        if customer_data.get("status") != CustomerStatusData.ACTIVE.value:
+            await db.customers.update_one(
                 {"_id": ObjectId(invoice_data["id_customer"])},
-                {"$set": {"status": CustomerStatusData.ACTIVE.value}},
+                {"$set": {"status": CustomerStatusData.ACTIVE.value}}
             )
             await ActivateMikrotikPPPSecret(db, customer_data, False)
 
         await CheckMitraFee(db, customer_data, id)
 
-        # Add internal notification
         notification_data = {
             "id_user": ObjectId(customer_data["id_user"]),
             "title": "Tagihan Telah Dibayar",
-            "description": f"Tagihan anda senilai Rp{ThousandSeparator(invoice_data['amount'])} telah dikonfirmasi!",
+            "description": f"Tagihan anda senilai Rp{ThousandSeparator(total_amount)} telah dikonfirmasi!",
             "type": NotificationTypeData.OTHER.value,
             "is_read": 0,
             "created_at": GetCurrentDateTime(),
         }
-
         await CreateOneData(db.notifications, notification_data)
 
-    return JSONResponse(content={"message": "Tagihan telah dilunasi."})
-
+    return JSONResponse(content={"message": "Tagihan telah dilunasi dan disetujui."})
 
 @router.put("/mark-collected")
 async def mark_bill_as_collected(
