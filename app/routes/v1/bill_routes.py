@@ -129,7 +129,7 @@ async def get_bills(
 
 @router.get("/assigned")
 async def get_assigned_bills(
-    assigned_to: str | None = None,
+    assigned_to: str,
     page: int = 1,
     items: int = 10,
     sort_key: str = "due_date",
