@@ -737,6 +737,125 @@ async def check_customer_data(
     return JSONResponse(content={"customer_data": customer_data})
 
 
+# @router.post("/register")
+# async def register_customer(
+#     data: CustomerRegisterData = Body(..., embed=True),
+#     db: AsyncIOMotorClient = Depends(GetAmretaDatabase),
+# ):
+#     try:
+#         payload = data.dict(exclude_unset=True)
+#         payload["unique_code"] = await GenerateUniqueCode(db)
+
+#         # check exist id card number
+#         exist_id_card_number = await GetOneData(
+#             db.customers, {"id_card.number": payload["id_card"]["number"]}
+#         )
+#         if exist_id_card_number:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail={"message": "Nomor Kartu Identitas Telah Digunakan!"},
+#             )
+
+#         # check exist email
+#         exist_email = await GetOneData(db.users, {"email": payload["email"]})
+#         if exist_email:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail={"message": "Email Telah Digunakan!"},
+#             )
+
+#         # create user data
+#         user_data = {
+#             "name": payload["name"],
+#             "email": payload["email"],
+#             "password": pwd_context.hash(DEFAULT_CUSTOMER_PASSWORD),
+#             "phone_number": payload["phone_number"],
+#             "status": CustomerStatusData.NONACTIVE.value,
+#             "gender": payload["gender"],
+#             "saldo": 0,
+#             "referral": GenerateReferralCode(payload["email"]),
+#             "role": UserRole.CUSTOMER.value,
+#             "address": payload["location"]["address"],
+#         }
+#         insert_user_result = await CreateOneData(db.users, user_data)
+#         if not insert_user_result.inserted_id:
+#             raise HTTPException(
+#                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+#             )
+
+#         # check package profile
+#         package_data = await GetOneData(
+#             db.packages, {"_id": ObjectId(payload["id_package"])}
+#         )
+#         if not package_data:
+#             await DeleteOneData(db.users, {"_id": insert_user_result.inserted_id})
+#             raise HTTPException(
+#                 status_code=404, detail={"message": "Data Paket Tidak Ditemukan!"}
+#             )
+
+#         # formatting payload
+#         payload["id_user"] = insert_user_result.inserted_id
+#         payload["id_package"] = ObjectId(payload["id_package"])
+#         payload["status"] = CustomerStatusData.PENDING.value
+#         payload["registered_at"] = GetCurrentDateTime()
+#         payload["created_at"] = GetCurrentDateTime()
+#         odp = await GetNearestODP(
+#             db,
+#             longitude=payload.get("location", {}).get("longitude", 0),
+#             latitude=payload.get("location", {}).get("latitude", 0),
+#         )
+#         if odp:
+#             try:
+#                 payload["id_odp"] = ObjectId(odp["_id"])
+#             except Exception as e:
+#                 print(str(e))
+#                 pass
+
+#         insert_customer_result = await CreateOneData(db.customers, payload)
+#         if not insert_customer_result.inserted_id:
+#             await DeleteOneData(db.users, {"email": user_data["email"]})
+#             raise HTTPException(
+#                 status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
+#             )
+
+#         ticket_data = {
+#             "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
+#             "status": TicketStatusData.PENDING,
+#             "type": TicketTypeData.PSB.value,
+#             "id_reporter": insert_user_result.inserted_id,
+#             "id_assignee": None,
+#             "title": "Pemasangan Baru",
+#             "description": "Instalasi jaringan baru untuk Pelanggan",
+#             "created_at": GetCurrentDateTime(),
+#             "created_by": insert_user_result.inserted_id,
+#         }
+#         await CreateOneData(db.tickets, ticket_data)
+#         asyncio.create_task(
+#             SendTelegramNewCustomerMessage(db, str(insert_customer_result.inserted_id))
+#         )
+#         notification_data = {
+#             "title": "Pemasangan Baru",
+#             "description": "Instalasi jaringan baru untuk Pelanggan",
+#             "type": NotificationTypeData.TICKET.value,
+#             "is_read": 0,
+#             "id_reporter": insert_user_result.inserted_id,
+#             "created_at": GetCurrentDateTime(),
+#         }
+#         admin_user = await GetAggregateData(
+#             db.users, [{"$match": {"role": UserRole.OWNER}}]
+#         )
+#         if len(admin_user) > 0:
+#             for user in admin_user:
+#                 notification_data["id_user"] = ObjectId(user["_id"])
+#                 await CreateOneData(db.notifications, notification_data.copy())
+
+#         return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
+
+#     except HTTPException as http_err:
+#         raise http_err
+#     except Exception as e:
+#         print(str(e))
+#         raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 @router.post("/register")
 async def register_customer(
     data: CustomerRegisterData = Body(..., embed=True),
@@ -746,25 +865,17 @@ async def register_customer(
         payload = data.dict(exclude_unset=True)
         payload["unique_code"] = await GenerateUniqueCode(db)
 
-        # check exist id card number
-        exist_id_card_number = await GetOneData(
+        exist_id_card_task = GetOneData(
             db.customers, {"id_card.number": payload["id_card"]["number"]}
         )
-        if exist_id_card_number:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "Nomor Kartu Identitas Telah Digunakan!"},
-            )
+        exist_email_task = GetOneData(db.users, {"email": payload["email"]})
+        exist_id_card, exist_email = await asyncio.gather(exist_id_card_task, exist_email_task)
 
-        # check exist email
-        exist_email = await GetOneData(db.users, {"email": payload["email"]})
+        if exist_id_card:
+            raise HTTPException(status_code=400, detail={"message": "Nomor Kartu Identitas Telah Digunakan!"})
         if exist_email:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "Email Telah Digunakan!"},
-            )
+            raise HTTPException(status_code=400, detail={"message": "Email Telah Digunakan!"})
 
-        # create user data
         user_data = {
             "name": payload["name"],
             "email": payload["email"],
@@ -779,75 +890,74 @@ async def register_customer(
         }
         insert_user_result = await CreateOneData(db.users, user_data)
         if not insert_user_result.inserted_id:
-            raise HTTPException(
-                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
-            )
+            raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
-        # check package profile
-        package_data = await GetOneData(
-            db.packages, {"_id": ObjectId(payload["id_package"])}
-        )
-        if not package_data:
-            await DeleteOneData(db.users, {"_id": insert_user_result.inserted_id})
-            raise HTTPException(
-                status_code=404, detail={"message": "Data Paket Tidak Ditemukan!"}
-            )
-
-        # formatting payload
         payload["id_user"] = insert_user_result.inserted_id
         payload["id_package"] = ObjectId(payload["id_package"])
         payload["status"] = CustomerStatusData.PENDING.value
-        payload["registered_at"] = GetCurrentDateTime()
-        payload["created_at"] = GetCurrentDateTime()
-        odp = await GetNearestODP(
+        payload["registered_at"] = payload["created_at"] = GetCurrentDateTime()
+        payload["service_number"] = f"AMR-{int(GetCurrentDateTime().timestamp())}"
+
+        odp_task = GetNearestODP(
             db,
             longitude=payload.get("location", {}).get("longitude", 0),
             latitude=payload.get("location", {}).get("latitude", 0),
         )
+        package_task = GetOneData(db.packages, {"_id": ObjectId(payload["id_package"])})
+        odp, package_data = await asyncio.gather(odp_task, package_task)
+
+        if not package_data:
+            await DeleteOneData(db.users, {"_id": insert_user_result.inserted_id})
+            raise HTTPException(status_code=404, detail={"message": "Data Paket Tidak Ditemukan!"})
+
         if odp:
             try:
                 payload["id_odp"] = ObjectId(odp["_id"])
-            except Exception as e:
-                print(str(e))
+            except Exception:
                 pass
 
         insert_customer_result = await CreateOneData(db.customers, payload)
         if not insert_customer_result.inserted_id:
-            await DeleteOneData(db.users, {"email": user_data["email"]})
-            raise HTTPException(
-                status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE}
-            )
+            await DeleteOneData(db.users, {"_id": insert_user_result.inserted_id})
+            raise HTTPException(status_code=500, detail={"message": SYSTEM_ERROR_MESSAGE})
 
-        ticket_data = {
-            "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
-            "status": TicketStatusData.PENDING,
-            "type": TicketTypeData.PSB.value,
-            "id_reporter": insert_user_result.inserted_id,
-            "id_assignee": None,
-            "title": "Pemasangan Baru",
-            "description": "Instalasi jaringan baru untuk Pelanggan",
-            "created_at": GetCurrentDateTime(),
-            "created_by": insert_user_result.inserted_id,
-        }
-        await CreateOneData(db.tickets, ticket_data)
+        asyncio.create_task(
+            CreateOneData(db.tickets, {
+                "name": f"PSB-{int(GetCurrentDateTime().timestamp())}",
+                "status": TicketStatusData.PENDING,
+                "type": TicketTypeData.PSB.value,
+                "id_reporter": insert_user_result.inserted_id,
+                "id_assignee": None,
+                "title": "Pemasangan Baru",
+                "description": "Instalasi jaringan baru untuk Pelanggan",
+                "created_at": GetCurrentDateTime(),
+                "created_by": insert_user_result.inserted_id,
+            })
+        )
+
         asyncio.create_task(
             SendTelegramNewCustomerMessage(db, str(insert_customer_result.inserted_id))
         )
-        notification_data = {
-            "title": "Pemasangan Baru",
-            "description": "Instalasi jaringan baru untuk Pelanggan",
-            "type": NotificationTypeData.TICKET.value,
-            "is_read": 0,
-            "id_reporter": insert_user_result.inserted_id,
-            "created_at": GetCurrentDateTime(),
-        }
-        admin_user = await GetAggregateData(
-            db.users, [{"$match": {"role": UserRole.OWNER}}]
-        )
-        if len(admin_user) > 0:
-            for user in admin_user:
-                notification_data["id_user"] = ObjectId(user["_id"])
-                await CreateOneData(db.notifications, notification_data.copy())
+
+        async def notify_admins():
+            admin_users = await GetAggregateData(db.users, [{"$match": {"role": UserRole.OWNER}}])
+            notification_data = {
+                "title": "Pemasangan Baru",
+                "description": "Instalasi jaringan baru untuk Pelanggan",
+                "type": NotificationTypeData.TICKET.value,
+                "is_read": 0,
+                "id_reporter": insert_user_result.inserted_id,
+                "created_at": GetCurrentDateTime(),
+            }
+            tasks = []
+            for user in admin_users:
+                notif = notification_data.copy()
+                notif["id_user"] = ObjectId(user["_id"])
+                tasks.append(CreateOneData(db.notifications, notif))
+            if tasks:
+                await asyncio.gather(*tasks)
+
+        asyncio.create_task(notify_admins())
 
         return JSONResponse(content={"message": DATA_HAS_INSERTED_MESSAGE})
 
